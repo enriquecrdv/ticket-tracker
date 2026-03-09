@@ -1,0 +1,386 @@
+/* Reset global de estilos */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Contenedor principal de login - pantalla completa centrada */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%);
+  padding: 20px;
+}
+
+/* Tarjeta de login con diseño de dos columnas */
+.login-card {
+  width: 100%;
+  max-width: 1000px;
+  height: auto;
+  background: #ffffff;
+  display: flex;
+  flex-direction: row;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+/* Efecto hover en la tarjeta de login */
+.login-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 120px rgba(212, 175, 55, 0.61);
+}
+
+/* Sección izquierda - formulario */
+.login-left {
+  width: 50%;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+}
+
+/* Logo con degradado dorado */
+.logo {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #d4af37 0%, #ffc107 100%);
+  color: #1a1a1a;
+  font-weight: bold;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  margin-bottom: 40px;
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.35);
+  transition: transform 0.3s ease;
+}
+
+/* Efecto hover en el logo - rotación y escala */
+.logo:hover {
+  transform: scale(1.05) rotate(5deg);
+}
+
+/* Título h2 de la sección izquierda */
+.login-left h2 {
+  margin-bottom: 10px;
+  font-weight: 700;
+  font-size: 32px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* párrafo descriptivo de la sección izquierda */
+.login-left > p {
+  margin-bottom: 40px;
+  font-size: 15px;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* Grupo de formulario - cada campo */
+.form-group {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Etiquetas del formulario */
+.form-group label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c2c2c;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Campos de entrada del formulario */
+.form-group input {
+  padding: 14px 16px;
+  border: 2px solid #e8e8e8;
+  border-radius: 10px;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  color: #2c2c2c;
+  background: #fafafa;
+}
+
+/* Placeholder de los inputs */
+.form-group input::placeholder {
+  color: #9a9a9a;
+  opacity: 1;
+}
+
+/* Estado focus de los inputs */
+.form-group input:focus {
+  outline: none;
+  border-color: #d4af37;
+  box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.15);
+  background: #fff;
+}
+
+/* Opciones del formulario - recordar y contraseña olvidada */
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  font-size: 13px;
+}
+
+/* Checkbox de recordar contraseña */
+.remember {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Estilo del checkbox */
+.remember input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #d4af37;
+}
+
+/* Enlaces en opciones del formulario */
+.form-options a {
+  color: #d4af37;
+  text-decoration: none;
+  transition: color 0.3s;
+  font-weight: 500;
+}
+
+/* Hover en enlaces de opciones */
+.form-options a:hover {
+  color: #ffc107;
+  text-decoration: underline;
+}
+
+/* Botón de login con degradado */
+.login-btn {
+  background: linear-gradient(135deg, #d4af37 0%, #ffc107 100%);
+  color: #1a1a1a;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  font-weight: 700;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Efecto hover en el botón login */
+.login-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(212, 175, 55, 0.45);
+}
+
+/* Efecto active en el botón login */
+.login-btn:active {
+  transform: translateY(-1px);
+}
+
+/* Divisor "O" entre opciones */
+.divider {
+  text-align: center;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: #999;
+  position: relative;
+}
+
+/* Línea horizontal del divisor */
+.divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e0e0e0, transparent);
+}
+
+/* Texto "O" del divisor */
+.divider span {
+  background: #fafafa;
+  padding: 0 12px;
+  position: relative;
+}
+
+/* Contenedor de botones sociales */
+.social-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+/* Botones de redes sociales */
+.social-buttons button {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #e0e0e0;
+  background: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+/* Efecto hover en botones sociales */
+.social-buttons button:hover {
+  border-color: #d4af37;
+  background: #fafafa;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(212, 175, 55, 0.2);
+}
+
+/* Texto de registro - enlace a crear cuenta */
+.register-text {
+  font-size: 14px;
+  text-align: center;
+  color: #666;
+}
+
+/* Enlace de registro */
+.register-text a {
+  font-weight: 700;
+  text-decoration: none;
+  color: #d4af37;
+  transition: color 0.3s;
+}
+
+/* Hover en enlace de registro */
+.register-text a:hover {
+  color: #ffc107;
+}
+
+/* Sección derecha - contenido promocional */
+.login-right {
+  width: 50%;
+  background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Efecto de fondo decorativo en la sección derecha */
+.login-right::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(
+    circle,
+    rgba(212, 175, 55, 0.1) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Título h1 de la sección derecha */
+.login-right h1 {
+  font-size: 44px;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #d4af37 0%, #ffc107 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  position: relative;
+  z-index: 1;
+}
+
+/* Párrafo de la sección derecha */
+.login-right p {
+  font-size: 16px;
+  color: #ccc;
+  line-height: 1.8;
+  position: relative;
+  z-index: 1;
+}
+
+/* Media query para tablets - hasta 768px */
+@media (max-width: 768px) {
+  /* Cambiar dirección del login card a columna */
+  .login-card {
+    flex-direction: column;
+  }
+
+  /* Ajustar ancho de las secciones */
+  .login-left,
+  .login-right {
+    width: 100%;
+    padding: 40px;
+  }
+
+  /* Quitar borde izquierdo y agregar borde superior */
+  .login-right {
+    border-left: none;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  /* Reducir tamaño de títulos */
+  .login-left h2 {
+    font-size: 28px;
+  }
+
+  .login-right h1 {
+    font-size: 36px;
+  }
+}
+
+/* Media query para móviles - hasta 480px */
+@media (max-width: 480px) {
+  /* Reducir padding en secciones */
+  .login-left,
+  .login-right {
+    padding: 24px;
+  }
+
+  /* Reducir tamaño del logo */
+  .logo {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    margin-bottom: 24px;
+  }
+
+  /* Reducir tamaños de títulos en móvil */
+  .login-left h2 {
+    font-size: 22px;
+  }
+
+  .login-right h1 {
+    font-size: 28px;
+  }
+
+  /* Reducir tamaño de botones sociales */
+  .social-buttons button {
+    width: 44px;
+    height: 44px;
+  }
+}
