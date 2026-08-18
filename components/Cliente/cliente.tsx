@@ -645,7 +645,7 @@ export default function ClienteComponent() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {formData.category !== "" &&
-                    formData.category !== "Alta de clientes" && (
+                    formData.category !== initialForm.category && (
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
                           Número de Cliente *
@@ -655,10 +655,7 @@ export default function ClienteComponent() {
                           name="customerNumber"
                           value={formData.customerNumber}
                           onChange={handleInputChange}
-                          required={
-                            formData.category &&
-                            formData.category !== "Alta de clientes"
-                          }
+                          required={formData.category !== ""}
                           className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg 
   focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm
   placeholder:text-slate-500 placeholder:font-medium placeholder:opacity-100"
