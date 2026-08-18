@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, FormEvent } from "react";
+import Image from "next/image";
 import "./Login.css";
 
 const Login: React.FC = () => {
@@ -11,11 +12,7 @@ const Login: React.FC = () => {
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    console.log({
-      email,
-      password,
-      remember,
-    });
+    // La autenticación se conectará al backend en una etapa posterior.
 
     // Aquí conectarías tu API
   };
@@ -77,12 +74,12 @@ const Login: React.FC = () => {
 
             <div className="social-buttons">
               <button type="button">
-                <img src="/icon/google.png" alt="Google" width={20} />
+                <Image src="/icon/google.png" alt="Google" width={20} height={20} />
               </button>
             </div>
 
             <p className="register-text">
-              Don't have an account? <a href="#">Create Account</a>
+              Don&apos;t have an account? <a href="#">Create Account</a>
             </p>
           </form>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { mockChains, mockTickets, mockUsers } from "@/lib/mock-data";
-import { Chain, Ticket, User } from "@/lib/types";
+import { Chain, Ticket, TicketStatus, User } from "@/lib/types";
 import {
   Users,
   Link2,
@@ -43,7 +43,7 @@ export default function AdminPage() {
     "all" | "activa" | "inactiva"
   >("all");
   const [ticketStatusFilter, setTicketStatusFilter] = useState<
-    "all" | "pendiente" | "en_progreso" | "completada"
+    TicketStatus | "all"
   >("all");
 
   const [showNotification, setShowNotification] = useState(false);
@@ -89,7 +89,7 @@ export default function AdminPage() {
       const daysDiff = Math.floor(
         (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24),
       );
-      return daysDiff > 5 && ticket.estado !== "completada";
+      return daysDiff > 5 && ticket.estado !== "cerrado";
     });
   }, [tickets]);
 
@@ -548,16 +548,14 @@ export default function AdminPage() {
                 setTicketStatusFilter(
                   e.target.value as
                     | "all"
-                    | "pendiente"
-                    | "en_progreso"
-                    | "completada",
+                    | TicketStatus,
                 )
               }
             >
               <option value="all">Todos los estados</option>
               <option value="pendiente">Pendiente</option>
-              <option value="en_progreso">En progreso</option>
-              <option value="completado">Completado</option>
+              <option value="seguimiento">Seguimiento</option>
+              <option value="cerrado">Cerrado</option>
             </select>
           </div>
 
@@ -568,7 +566,7 @@ export default function AdminPage() {
               const daysDiff = Math.floor(
                 (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24),
               );
-              const isOverdue = daysDiff > 5 && ticket.estado !== "completada";
+              const isOverdue = daysDiff > 5 && ticket.estado !== "cerrado";
 
               return (
                 <div
@@ -601,7 +599,7 @@ export default function AdminPage() {
                     </div>
 
                     <div className="flex gap-2 items-center">
-                      {ticket.estado === "completada" ? (
+                      {ticket.estado === "cerrado" ? (
                         <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold flex items-center gap-1">
                           <CheckCircle className="w-4 h-4" /> Completado
                         </span>

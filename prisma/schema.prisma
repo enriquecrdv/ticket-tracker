@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserRole {
+  ADMIN
+  ANALISTA
+}
+
+enum TicketStatus {
+  PENDIENTE
+  ASIGNADO
+  EN_PROGRESO
+  ESPERA_CLIENTE
+  RESUELTO
+  CERRADO
+}
+
+enum TicketLevel {
+  BAJO
+  MEDIO
+  ALTO
+}
+
+enum HistoryAction {
+  CREADO
+  ASIGNADO
+  CAMBIO_ESTADO
+  COMENTARIO
+  ARCHIVO_ADJUNTO
+  ACTUALIZADO
+}
+
+model User {
+  id              String          @id @default(cuid())
+  name            String          @db.VarChar(120)
+  email           String          @unique @db.VarChar(191)
+  passwordHash    String          @db.VarChar(255)
+  role            UserRole        @default(ANALISTA)
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  assignedTickets Ticket[]        @relation("AssignedAnalyst")
+  createdTickets  Ticket[]        @relation("CreatedByUser")
+  comments        TicketComment[]
+  historyEntries  TicketHistory[]
+  attachments     Attachment[]
+
+  @@index([role, active])
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  customerNumber String   @unique @db.VarChar(50)
+  name           String   @db.VarChar(150)
+  email          String?  @unique @db.VarChar(191)
+  phone          String?  @db.VarChar(30)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tickets        Ticket[]
+
+  @@index([name])
+}
+
+model Chain {
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(120)
+  description String?  @db.Text
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branches    Branch[]
+  tickets     Ticket[]
+
+  @@index([active])
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  code      String   @db.VarChar(50)
+  name      String   @db.VarChar(150)
+  address   String?  @db.VarChar(255)
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chainId   String
+  chain     Chain    @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  tickets   Ticket[]
+
+  @@unique([chainId, code])
+  @@index([chainId, active])
+}
+
+model Ticket {
+  id              String          @id @default(cuid())
+  folio           String          @unique @db.VarChar(30)
+  title           String          @db.VarChar(180)
+  description     String          @db.Text
+  category        String          @db.VarChar(150)
+  subcategory     String          @db.VarChar(150)
+  impact          TicketLevel     @default(MEDIO)
+  priority        TicketLevel     @default(MEDIO)
+  status          TicketStatus    @default(PENDIENTE)
+  openingDate     DateTime        @default(now())
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  clientId        String
+  chainId         String
+  branchId        String?
+  assignedToId    String?
+  createdByUserId String?
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  chain           Chain           @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  branch          Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  assignedTo      User?           @relation("AssignedAnalyst", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdByUser   User?           @relation("CreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  comments        TicketComment[]
+  history         TicketHistory[]
+  attachments     Attachment[]
+
+  @@index([status, createdAt])
+  @@index([assignedToId, status])
+  @@index([clientId, createdAt])
+  @@index([chainId, branchId])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  message   String   @db.Text
+  internal  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  ticketId  String
+  authorId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
+  @@index([authorId])
+}
+
+model TicketHistory {
+  id        String        @id @default(cuid())
+  action    HistoryAction
+  detail    String?       @db.Text
+  createdAt DateTime      @default(now())
+  ticketId  String
+  userId    String?
+  ticket    Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([userId])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  originalName String   @db.VarChar(255)
+  storageKey   String   @unique @db.VarChar(255)
+  mimeType     String   @db.VarChar(100)
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+  ticketId     String
+  uploadedById String?
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([uploadedById])
+}
