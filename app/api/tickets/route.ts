@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server-auth";
 import { ticketInclude, toClientTicket, toStaffTicket } from "@/lib/ticket-mappers";
+import { DEFAULT_REPORT_CATALOG, type ReportCategory } from "@/lib/report-catalog";
 
 const ticketSchema = z.object({
   customerNumber: z.union([z.string().trim().regex(/^\d{9}$/), z.literal("")]),
@@ -63,6 +64,37 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  const files = [...formData.entries()].filter(([, value]) => value instanceof File) as [string, File][];
+  const allowedExtensions = new Set([".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".eml", ".msg", ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"]);
+  const invalidFile = files.find(([, file]) => !file.size || !allowedExtensions.has(path.extname(file.name).toLowerCase()));
+  if (invalidFile) return NextResponse.json({ error: `El archivo ${invalidFile[1].name} no es un documento, correo o imagen permitido.` }, { status: 400 });
+  if (files.reduce((total, [, file]) => total + file.size, 0) > 200 * 1024 * 1024) return NextResponse.json({ error: "El total de archivos no puede superar 200 MB." }, { status: 400 });
+  const isAccountRequest = data.category === "Alta de clientes";
+  if (!isAccountRequest) {
+    const setting = await prisma.appSetting.findUnique({ where: { key: "report-catalog" } });
+    const catalog = (setting?.value ?? DEFAULT_REPORT_CATALOG) as unknown as ReportCategory[];
+    const category = catalog.find((item) => item.active && item.name === data.category);
+    const report = category?.reports.find((item) => item.active && item.name === data.subcategory);
+    if (!report) return NextResponse.json({ error: "La categoria o tipo de reporte ya no esta disponible. Actualiza la pagina." }, { status: 400 });
+    const values = Object.fromEntries(data.description.split("\n").map((line) => { const index = line.indexOf(":"); return index < 0 ? ["", ""] : [line.slice(0, index), line.slice(index + 1).trim()]; }));
+    const invalidField = report.fields.find((field) => (field.required && !values[field.label]) || (field.digits && values[field.label]?.length !== field.digits));
+    if (invalidField) return NextResponse.json({ error: `Revisa el campo ${invalidField.label}.` }, { status: 400 });
+  }
+  if (isAccountRequest && data.customerNumber) {
+    return NextResponse.json({ error: "Una solicitud de alta no debe incluir un código de cliente existente." }, { status: 400 });
+  }
+  if (isAccountRequest) {
+    if (!/^[A-Z0-9 ]+$/.test(data.branch) || !/^[A-Z0-9 :\.\-\n]+$/.test(data.description)) {
+      return NextResponse.json({ error: "El formato de alta solo admite mayúsculas sin acentos ni caracteres especiales." }, { status: 400 });
+    }
+    const requiredDocuments = [
+      ["ine", "INE o pasaporte"],
+      ["comprobante-domicilio", "comprobante de domicilio"],
+      ["constancia-fiscal", "constancia de situación fiscal"],
+    ] as const;
+    const missing = requiredDocuments.find(([key]) => !(formData.get(key) instanceof File));
+    if (missing) return NextResponse.json({ error: `Falta adjuntar: ${missing[1]}.` }, { status: 400 });
+  }
   const code = data.branch.toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 40);
   const level = { low: "BAJO", medium: "MEDIO", high: "ALTO" } as const;
 
@@ -73,7 +105,7 @@ export async function POST(request: Request) {
     update: { name: data.branch, active: true },
     create: { chainId: chain.id, code, name: data.branch },
   });
-  const pendingHigh = data.category === "Alta de clientes";
+  const pendingHigh = isAccountRequest;
   const accountCode = pendingHigh ? `ALTA-${chain.id.slice(-12)}` : data.customerNumber;
   let client = await prisma.client.findFirst({ where: { chainId: chain.id, customerNumber: accountCode, active: true } });
   if (!client) {
@@ -100,12 +132,9 @@ export async function POST(request: Request) {
     include: ticketInclude,
   });
 
-  const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
-  const files = [...formData.entries()].filter(([, value]) => value instanceof File) as [string, File][];
   const uploadDirectory = path.join(process.cwd(), "storage", "uploads");
 
   for (const [, file] of files) {
-    if (!file.size || file.size > 5 * 1024 * 1024 || !allowedTypes.has(file.type)) continue;
     await mkdir(uploadDirectory, { recursive: true });
     const storageKey = `${ticket.id}-${randomUUID()}${path.extname(file.name)}`;
     await writeFile(path.join(uploadDirectory, storageKey), Buffer.from(await file.arrayBuffer()));

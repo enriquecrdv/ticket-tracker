@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Ticket, TicketStatus } from "@/lib/types";
 import { UserMenu } from "@/components/shared/UserMenu";
-import { Search, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import { Search, Clock, CheckCircle, AlertCircle, Download } from "lucide-react";
 
 export default function AnalistaPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -20,6 +20,7 @@ export default function AnalistaPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [message, setMessage] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetch("/api/tickets")
@@ -61,6 +62,27 @@ export default function AnalistaPage() {
   }, [tickets, searchTerm, statusFilter, chainFilter, dateFrom, dateTo, sortBy]);
 
   const chains = useMemo(() => [...new Set(tickets.map((ticket) => ticket.cadena))].sort(), [tickets]);
+
+  const exportAltaTickets = async () => {
+    setExporting(true);
+    setMessage("");
+    const response = await fetch("/api/tickets/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: filteredTickets.map((ticket) => ticket.id) }) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null) as { error?: string } | null;
+      setMessage(data?.error ?? "No fue posible generar el archivo Excel.");
+      setExporting(false);
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `altas-clientes-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMessage("Archivo Excel generado correctamente con las altas filtradas.");
+    setExporting(false);
+  };
 
   const changeStatus = async (ticketId: string, status: TicketStatus) => {
     const response = await fetch(`/api/tickets/${ticketId}`, {
@@ -179,9 +201,7 @@ export default function AnalistaPage() {
           {/* Sidebar - Tickets List */}
           <section className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-slate-200">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Tickets
-              </h2>
+              <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold text-slate-900">Tickets</h2><button type="button" onClick={exportAltaTickets} disabled={exporting || filteredTickets.length === 0} title="Exporta las solicitudes de alta visibles según los filtros" className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40"><Download className="h-4 w-4" />{exporting ? "Generando..." : "Exportar altas"}</button></div>
 
               {/* Search */}
               <div className="relative mb-4">

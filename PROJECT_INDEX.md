@@ -22,7 +22,7 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | Administrador | `app/admin/page.tsx` | Usuarios, cadenas, métricas y supervisión simulada |
 | Analista | `app/analista/page.tsx` | Atención, comentarios y estados simulados |
 | Cliente | `components/client/ClientPortal.tsx` | Dashboard y navegación del portal cliente |
-| Alta cliente | `components/client/CreateTicketWizard.tsx` | Creación guiada en cuatro pasos |
+| Alta cliente | `components/client/CreateTicketWizard.tsx` | Ticket normal o alta fiscal guiada con documentos obligatorios |
 | Detalle cliente | `components/client/TicketDetail.tsx` | Conversación, actividad y datos del ticket |
 | Vista cliente | `app/test-cliente/page.tsx` | Monta el componente de cliente |
 | Tipos UI | `lib/types.ts` | Tipos heredados de las pantallas simuladas |
@@ -43,7 +43,9 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | `/api/tickets/[id]` | Staff | Actualizar estado y asignación |
 | `/api/tickets/[id]/comments` | Sesión autorizada | Conversación del ticket |
 | `/api/tickets/[id]/attachments` | Sesión autorizada | Agregar adjuntos al ticket |
+| `/api/tickets/export` | Staff | Exportar solicitudes de alta filtradas a Excel |
 | `/api/profile` | Sesión | Consultar perfil y cambiar contraseña |
+| `/api/report-catalog` | Sesión/ADMIN | Consultar y administrar el catálogo dinámico de reportes |
 | `/api/users` | Solo `ADMIN` | Listar y crear usuarios |
 | `/api/chains` | Solo `ADMIN` | Listar y crear cadenas |
 
@@ -62,7 +64,7 @@ Git.
 ## Modelo Prisma
 
 Entidades: `User`, `Client`, `Chain`, `Branch`, `Ticket`, `TicketComment`,
-`TicketHistory` y `Attachment`.
+`TicketHistory`, `Attachment` y `AppSetting`.
 
 Estados oficiales de base de datos:
 

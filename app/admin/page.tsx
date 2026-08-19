@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Chain, Ticket, TicketStatus, User } from "@/lib/types";
 import { UserMenu } from "@/components/shared/UserMenu";
+import { CatalogEditor } from "@/components/admin/CatalogEditor";
 import {
   Users,
   Link2,
@@ -359,6 +360,9 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+
+        {/* Tabla de Usuarios */}
+        <CatalogEditor />
 
         {/* Tabla de Usuarios */}
         <div className="bg-white rounded-xl shadow p-6">

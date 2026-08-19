@@ -212,3 +212,9 @@ model Attachment {
   @@index([ticketId, createdAt])
   @@index([uploadedById])
 }
+
+model AppSetting {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt
+}
