@@ -27,10 +27,44 @@ const adapter = new PrismaMariaDb({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const [adminPasswordHash, analystPasswordHash] = await Promise.all([
+  const [adminPasswordHash, analystPasswordHash, clientPasswordHash] = await Promise.all([
     bcrypt.hash("Admin123!", 12),
     bcrypt.hash("Analista123!", 12),
+    bcrypt.hash("Cliente123!", 12),
   ]);
+
+  const managedChainNames = [
+    "WINGS ARMY", "SPORT BOOK & YAK", "SANBORNS", "MYT", "HOOTERS", "FISHERS",
+    "CERVECERÍA CHAPULTEPEC", "CINÉPOLIS", "CINEMEX", "CIRSA", "WINGMAN",
+    "TAQUEARTE", "SUSHI ROLL", "SIX FLAGS", "SANTAS ALITAS", "PALOMINOS",
+    "MI GUSTO ES", "GRUPO DINIZ", "COTORRITOS", "APPLEBEE'S",
+    "PALACIO DE HIERRO", "CHILIM BALAM",
+  ];
+  for (const name of managedChainNames) {
+    await prisma.chain.upsert({ where: { name }, update: { active: true }, create: { name } });
+  }
+  const santasAlitas = await prisma.chain.findUniqueOrThrow({ where: { name: "SANTAS ALITAS" } });
+  await prisma.commercialCondition.upsert({
+    where: { chainId: santasAlitas.id },
+    update: {},
+    create: {
+      chainId: santasAlitas.id,
+      credit: "NO",
+      contract: "SI",
+      guarantee: "NO",
+      collection: "NO Centralizada",
+      collectionPortal: "No",
+      segment: "TG",
+      priceList: "14",
+      discount: "[]",
+      promoList: "NULL",
+      continent: "003",
+      scheme: "I",
+      creditDays: "D003",
+      pinc: "1 de julio de 2026",
+      cashAndCredit: "SIN CREDITO",
+    },
+  });
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@empresa.com" },
@@ -132,6 +166,31 @@ async function main() {
       email: "cliente1002@empresa.com",
       phone: "5551001002",
     },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "cliente1001@empresa.com" },
+    update: {
+      name: "Abarrotes La Esperanza",
+      passwordHash: clientPasswordHash,
+      role: UserRole.CLIENTE,
+      active: true,
+      clientId: clientOne.id,
+    },
+    create: {
+      id: "seed-user-client-1001",
+      name: "Abarrotes La Esperanza",
+      email: "cliente1001@empresa.com",
+      passwordHash: clientPasswordHash,
+      role: UserRole.CLIENTE,
+      clientId: clientOne.id,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "santas.alitas@empresa.com" },
+    update: { name: "Santas Alitas Admin", passwordHash: clientPasswordHash, role: UserRole.CLIENTE, active: true, chainId: santasAlitas.id },
+    create: { name: "Santas Alitas Admin", email: "santas.alitas@empresa.com", passwordHash: clientPasswordHash, role: UserRole.CLIENTE, chainId: santasAlitas.id },
   });
 
   const ticketOne = await prisma.ticket.upsert({

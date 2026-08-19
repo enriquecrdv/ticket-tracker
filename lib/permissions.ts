@@ -17,4 +17,12 @@ export const permissions = {
     canReplyTickets: true,
     canSeeAnalystActivity: false,
   },
+  cliente: {
+    canManageUsers: false,
+    canManageChains: false,
+    canSeeAllTickets: false,
+    canEditTicketStatus: false,
+    canReplyTickets: true,
+    canSeeAnalystActivity: false,
+  },
 } satisfies Record<UserRole, Record<string, boolean>>;

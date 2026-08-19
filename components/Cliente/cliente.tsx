@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useState, type ChangeEvent, type JSX } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type JSX } from "react";
 import React from "react";
+import { getSession, signOut } from "next-auth/react";
 import {
-  ChevronDown,
+  LogOut,
   Search,
   Plus,
   Filter,
@@ -245,6 +246,23 @@ export default function ClienteComponent() {
     message: string;
   } | null>(null);
 
+  useEffect(() => {
+    getSession().then(async (session) => {
+      if (!session?.user) return;
+      setFormData((current) => ({
+        ...current,
+        customerNumber: session.user.customerNumber ?? "",
+        storeName: session.user.name ?? "",
+      }));
+      setSearchQuery(session.user.customerNumber ?? "");
+      const response = await fetch("/api/tickets");
+      if (!response.ok) return;
+      const data: TicketData[] = await response.json();
+      setTickets(data);
+      setSelectedTicket(data[0] ?? null);
+    });
+  }, []);
+
   // Calcula subcategorías disponibles basadas en la categoría seleccionada
   const availableSubcategories = useMemo(() => {
     if (!formData.category) return [];
@@ -335,10 +353,17 @@ export default function ClienteComponent() {
         method: "POST",
         body: payload,
       });
-      if (!response.ok) throw new Error("No se pudo crear el ticket");
+      const created: TicketData | { error?: string } = await response.json();
+      if (!response.ok || !("id" in created)) {
+        throw new Error("error" in created ? created.error : "No se pudo crear el ticket");
+      }
       // Limpia el formulario tras éxito
       setFormData(initialForm);
-      setFeedback({ type: "success", message: "Ticket creado exitosamente." });
+      setTickets([created]);
+      setSelectedTicket(created);
+      setSearchQuery(created.id);
+      setActiveTab("search");
+      setFeedback({ type: "success", message: `Ticket ${created.id} creado exitosamente.` });
     } catch (err) {
       setFeedback({
         type: "error",
@@ -358,11 +383,12 @@ export default function ClienteComponent() {
       const response = await fetch(
         `/api/tickets?q=${encodeURIComponent(searchQuery)}`,
       );
-      if (!response.ok) throw new Error("No se pudo obtener tickets");
-      const data: TicketData[] = await response.json();
+      const result: TicketData[] | { error?: string } = await response.json();
+      if (!response.ok || !Array.isArray(result)) throw new Error("error" in result ? result.error : "No se pudo obtener tickets");
+      const data = result;
       setTickets(data);
       // Auto-selecciona el primer ticket si existe
-      if (data.length) setSelectedTicket(data[0]);
+      setSelectedTicket(data[0] ?? null);
     } catch (err) {
       setFeedback({
         type: "error",
@@ -393,8 +419,12 @@ export default function ClienteComponent() {
               </p>
             </div>
           </div>
-          <button className="text-slate-600 hover:text-slate-900 transition">
-            <ChevronDown className="w-5 h-5" />
+          <button
+            onClick={() => signOut({ callbackUrl: "/" })}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Cerrar sesión</span>
           </button>
         </div>
       </header>

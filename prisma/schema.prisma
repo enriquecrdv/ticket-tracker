@@ -10,6 +10,7 @@ datasource db {
 enum UserRole {
   ADMIN
   ANALISTA
+  CLIENTE
 }
 
 enum TicketStatus {
@@ -37,19 +38,25 @@ enum HistoryAction {
 }
 
 model User {
-  id              String          @id @default(cuid())
-  name            String          @db.VarChar(120)
-  email           String          @unique @db.VarChar(191)
-  passwordHash    String          @db.VarChar(255)
-  role            UserRole        @default(ANALISTA)
-  active          Boolean         @default(true)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  assignedTickets Ticket[]        @relation("AssignedAnalyst")
-  createdTickets  Ticket[]        @relation("CreatedByUser")
-  comments        TicketComment[]
-  historyEntries  TicketHistory[]
-  attachments     Attachment[]
+  id                    String          @id @default(cuid())
+  name                  String          @db.VarChar(120)
+  email                 String          @unique @db.VarChar(191)
+  passwordHash          String          @db.VarChar(255)
+  role                  UserRole        @default(ANALISTA)
+  active                Boolean         @default(true)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  clientId              String?         @unique
+  client                Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  chainId               String?
+  chain                 Chain?          @relation(fields: [chainId], references: [id], onDelete: SetNull)
+  assignedTickets       Ticket[]        @relation("AssignedAnalyst")
+  createdTickets        Ticket[]        @relation("CreatedByUser")
+  comments              TicketComment[]
+  historyEntries        TicketHistory[]
+  attachments           Attachment[]
+  receivedNotifications Notification[]  @relation("NotificationRecipient")
+  sentNotifications     Notification[]  @relation("NotificationSender")
 
   @@index([role, active])
 }
@@ -64,21 +71,51 @@ model Client {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   tickets        Ticket[]
+  user           User?
+  chainId        String?
+  chain          Chain?   @relation(fields: [chainId], references: [id], onDelete: SetNull)
 
   @@index([name])
+  @@index([chainId, customerNumber])
 }
 
 model Chain {
-  id          String   @id @default(cuid())
-  name        String   @unique @db.VarChar(120)
-  description String?  @db.Text
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  branches    Branch[]
-  tickets     Ticket[]
+  id                  String               @id @default(cuid())
+  name                String               @unique @db.VarChar(120)
+  description         String?              @db.Text
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  branches            Branch[]
+  tickets             Ticket[]
+  clients             Client[]
+  users               User[]
+  commercialCondition CommercialCondition?
 
   @@index([active])
+}
+
+model CommercialCondition {
+  id               String   @id @default(cuid())
+  chainId          String   @unique
+  credit           String?  @db.VarChar(100)
+  contract         String?  @db.VarChar(100)
+  guarantee        String?  @db.VarChar(100)
+  collection       String?  @db.VarChar(100)
+  collectionPortal String?  @db.VarChar(100)
+  segment          String?  @db.VarChar(50)
+  priceList        String?  @db.VarChar(50)
+  discount         String?  @db.VarChar(100)
+  promoList        String?  @db.VarChar(100)
+  continent        String?  @db.VarChar(50)
+  scheme           String?  @db.VarChar(50)
+  creditDays       String?  @db.VarChar(50)
+  pinc             String?  @db.VarChar(100)
+  cashAndCredit    String?  @db.VarChar(100)
+  comments         String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  chain            Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
 }
 
 model Branch {
@@ -108,6 +145,7 @@ model Ticket {
   subcategory     String          @db.VarChar(150)
   impact          TicketLevel     @default(MEDIO)
   priority        TicketLevel     @default(MEDIO)
+  adminAlert      Boolean         @default(false)
   status          TicketStatus    @default(PENDIENTE)
   openingDate     DateTime        @default(now())
   resolvedAt      DateTime?
@@ -176,4 +214,23 @@ model Attachment {
 
   @@index([ticketId, createdAt])
   @@index([uploadedById])
+}
+
+model AppSetting {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  message     String   @db.Text
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  recipientId String
+  senderId    String?
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender      User?    @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, read, createdAt])
 }
