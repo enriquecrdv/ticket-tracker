@@ -1,21 +1,35 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { mockTickets } from "@/lib/mock-data";
+import { useEffect, useState, useMemo } from "react";
 import { Ticket, TicketStatus } from "@/lib/types";
+import { UserMenu } from "@/components/shared/UserMenu";
 import { Search, Clock, CheckCircle, AlertCircle } from "lucide-react";
 
 export default function AnalistaPage() {
-  const [tickets, setTickets] = useState<Ticket[]>(mockTickets);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>(
-    mockTickets[0]?.id || "",
-  );
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [selectedTicketId, setSelectedTicketId] = useState("");
   const [respuesta, setRespuesta] = useState("");
+  const [altaCode, setAltaCode] = useState("");
+  const [altaName, setAltaName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "todos">(
     "todos",
   );
   const [sortBy, setSortBy] = useState<"fecha" | "prioridad">("fecha");
+  const [chainFilter, setChainFilter] = useState("todos");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    fetch("/api/tickets")
+      .then((response) => response.json())
+      .then((data: Ticket[]) => {
+        if (!Array.isArray(data)) return;
+        setTickets(data);
+        setSelectedTicketId(data[0]?.id ?? "");
+      });
+  }, []);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
 
@@ -29,8 +43,12 @@ export default function AnalistaPage() {
 
         const matchesStatus =
           statusFilter === "todos" || ticket.estado === statusFilter;
+        const matchesChain = chainFilter === "todos" || ticket.cadena === chainFilter;
+        const created = new Date(ticket.createdAt);
+        const matchesFrom = !dateFrom || created >= new Date(`${dateFrom}T00:00:00`);
+        const matchesTo = !dateTo || created <= new Date(`${dateTo}T23:59:59`);
 
-        return matchesSearch && matchesStatus;
+        return matchesSearch && matchesStatus && matchesChain && matchesFrom && matchesTo;
       })
       .sort((a, b) => {
         if (sortBy === "fecha") {
@@ -40,65 +58,47 @@ export default function AnalistaPage() {
         }
         return 0;
       });
-  }, [tickets, searchTerm, statusFilter, sortBy]);
+  }, [tickets, searchTerm, statusFilter, chainFilter, dateFrom, dateTo, sortBy]);
 
-  const changeStatus = (ticketId: string, status: TicketStatus) => {
-    setTickets((prev) =>
-      prev.map((ticket) =>
-        ticket.id === ticketId
-          ? {
-              ...ticket,
-              estado: status,
-              updatedAt: new Date().toISOString(),
-              historial: [
-                {
-                  id: crypto.randomUUID(),
-                  accion: `Cambio de estado a ${status}`,
-                  usuario: "Ana Analista",
-                  createdAt: new Date().toLocaleString(),
-                },
-                ...ticket.historial,
-              ],
-            }
-          : ticket,
-      ),
-    );
+  const chains = useMemo(() => [...new Set(tickets.map((ticket) => ticket.cadena))].sort(), [tickets]);
+
+  const changeStatus = async (ticketId: string, status: TicketStatus) => {
+    const response = await fetch(`/api/tickets/${ticketId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null) as { error?: string } | null;
+      setMessage(data?.error ?? "No fue posible cambiar el estado. Intenta nuevamente.");
+      return;
+    }
+    const updated: Ticket = await response.json();
+    setTickets((prev) => prev.map((ticket) => ticket.id === ticketId ? updated : ticket));
+    setMessage(status === "espera_cliente" ? "Se solicitó información al cliente y se le marcó como requerida." : "Estado actualizado correctamente.");
   };
 
-  const responderTicket = () => {
+  const responderTicket = async () => {
     if (!selectedTicket || !respuesta.trim()) return;
-
-    setTickets((prev) =>
-      prev.map((ticket) =>
-        ticket.id === selectedTicket.id
-          ? {
-              ...ticket,
-              updatedAt: new Date().toISOString(),
-              comentarios: [
-                {
-                  id: crypto.randomUUID(),
-                  autor: "Ana Analista",
-                  autorRole: "analista",
-                  mensaje: respuesta,
-                  createdAt: new Date().toLocaleString(),
-                },
-                ...ticket.comentarios,
-              ],
-              historial: [
-                {
-                  id: crypto.randomUUID(),
-                  accion: "Analista respondió al ticket",
-                  usuario: "Ana Analista",
-                  createdAt: new Date().toLocaleString(),
-                },
-                ...ticket.historial,
-              ],
-            }
-          : ticket,
-      ),
-    );
-
+    const response = await fetch(`/api/tickets/${selectedTicket.id}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: respuesta }),
+    });
+    if (!response.ok) return;
+    const updated: Ticket = await response.json();
+    setTickets((prev) => prev.map((ticket) => ticket.id === updated.id ? updated : ticket));
     setRespuesta("");
+  };
+
+  const assignCustomerNumber = async () => {
+    if (!selectedTicket || !/^\d{9}$/.test(altaCode)) return;
+    const response = await fetch(`/api/tickets/${selectedTicket.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customerNumber: altaCode, customerName: altaName }) });
+    if (!response.ok) return;
+    const updated: Ticket = await response.json();
+    setTickets((current) => current.map((ticket) => ticket.id === updated.id ? updated : ticket));
+    setAltaCode("");
+    setAltaName("");
   };
 
   const getStatusIcon = (status: TicketStatus) => {
@@ -107,6 +107,8 @@ export default function AnalistaPage() {
         return <AlertCircle className="w-4 h-4 text-amber-500" />;
       case "seguimiento":
         return <Clock className="w-4 h-4 text-blue-500" />;
+      case "espera_cliente":
+        return <AlertCircle className="w-4 h-4 text-orange-500" />;
       case "cerrado":
         return <CheckCircle className="w-4 h-4 text-emerald-500" />;
     }
@@ -118,6 +120,8 @@ export default function AnalistaPage() {
         return "bg-amber-100 text-amber-800";
       case "seguimiento":
         return "bg-blue-100 text-blue-800";
+      case "espera_cliente":
+        return "bg-orange-100 text-orange-800";
       case "cerrado":
         return "bg-emerald-100 text-emerald-800";
     }
@@ -127,6 +131,7 @@ export default function AnalistaPage() {
     total: tickets.length,
     pendiente: tickets.filter((t) => t.estado === "pendiente").length,
     seguimiento: tickets.filter((t) => t.estado === "seguimiento").length,
+    espera: tickets.filter((t) => t.estado === "espera_cliente").length,
     cerrado: tickets.filter((t) => t.estado === "cerrado").length,
   };
 
@@ -134,19 +139,15 @@ export default function AnalistaPage() {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <h1 className="text-3xl font-bold text-slate-900">
-            Panel del Analista
-          </h1>
-          <p className="text-slate-600 mt-1">
-            Gestiona y da seguimiento a todos los tickets
-          </p>
+        <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 px-6 py-5">
+          <div><p className="text-sm font-semibold text-blue-600">Mesa de soporte</p><h1 className="text-3xl font-bold text-slate-900">Panel del analista</h1><p className="text-slate-600 mt-1">Gestiona y da seguimiento a las solicitudes.</p></div>
+          <UserMenu />
         </div>
       </div>
 
       {/* Stats */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {[
             { label: "Total", value: stats.total, color: "bg-slate-100" },
             {
@@ -159,6 +160,7 @@ export default function AnalistaPage() {
               value: stats.seguimiento,
               color: "bg-blue-100",
             },
+            { label: "Espera cliente", value: stats.espera, color: "bg-orange-100" },
             { label: "Cerrado", value: stats.cerrado, color: "bg-emerald-100" },
           ].map((stat) => (
             <div key={stat.label} className={`${stat.color} rounded-lg p-4`}>
@@ -209,8 +211,22 @@ export default function AnalistaPage() {
                     <option value="todos">Todos los estados</option>
                     <option value="pendiente">Pendiente</option>
                     <option value="seguimiento">Seguimiento</option>
+                    <option value="espera_cliente">Espera del cliente</option>
                     <option value="cerrado">Cerrado</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-2">Cadena</label>
+                  <select value={chainFilter} onChange={(e) => setChainFilter(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="todos">Todas las cadenas</option>
+                    {chains.map((chain) => <option key={chain} value={chain}>{chain}</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs font-semibold text-slate-600">Desde<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" /></label>
+                  <label className="text-xs font-semibold text-slate-600">Hasta<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" /></label>
                 </div>
 
                 <div>
@@ -340,12 +356,25 @@ export default function AnalistaPage() {
                   </div>
                 </div>
 
+                {selectedTicket.titulo.startsWith("Alta de clientes") && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6">
+                    <p className="font-semibold text-emerald-950">Asignar número de cliente</p>
+                    <p className="mt-1 text-sm text-emerald-700">Cuando el alta sea aprobada, captura el código definitivo de 9 dígitos.</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <input value={altaCode} onChange={(event) => setAltaCode(event.target.value.replace(/\D/g, "").slice(0, 9))} inputMode="numeric" maxLength={9} placeholder="Código de 9 dígitos" className="rounded-lg border border-emerald-200 px-3 py-2 text-sm" />
+                      <input value={altaName} onChange={(event) => setAltaName(event.target.value)} placeholder="Nombre si el código es nuevo" className="rounded-lg border border-emerald-200 px-3 py-2 text-sm" />
+                    </div>
+                    <button onClick={assignCustomerNumber} disabled={!/^\d{9}$/.test(altaCode)} className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Guardar número de cliente</button>
+                  </div>
+                )}
+
                 {/* Status Change Buttons */}
                 <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
                   <p className="text-sm font-semibold text-slate-900 mb-4">
                     Cambiar Estado
                   </p>
-                  <div className="grid grid-cols-3 gap-3">
+                  {message && <p role="status" className="mb-4 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{message}</p>}
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
                       {
                         status: "pendiente" as TicketStatus,
@@ -356,6 +385,11 @@ export default function AnalistaPage() {
                         status: "seguimiento" as TicketStatus,
                         label: "Seguimiento",
                         color: "bg-blue-600 hover:bg-blue-700",
+                      },
+                      {
+                        status: "espera_cliente" as TicketStatus,
+                        label: "Solicitar información",
+                        color: "bg-orange-600 hover:bg-orange-700",
                       },
                       {
                         status: "cerrado" as TicketStatus,

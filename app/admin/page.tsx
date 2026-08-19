@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { mockChains, mockTickets, mockUsers } from "@/lib/mock-data";
+import { useEffect, useState, useMemo } from "react";
 import { Chain, Ticket, TicketStatus, User } from "@/lib/types";
+import { UserMenu } from "@/components/shared/UserMenu";
 import {
   Users,
   Link2,
@@ -18,13 +18,14 @@ import {
 } from "lucide-react";
 
 export default function AdminPage() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [chains, setChains] = useState<Chain[]>(mockChains);
-  const [tickets] = useState<Ticket[]>(mockTickets);
+  const [users, setUsers] = useState<User[]>([]);
+  const [chains, setChains] = useState<Chain[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
 
   const [newUser, setNewUser] = useState({
     nombre: "",
     email: "",
+    password: "",
     role: "analista",
   });
 
@@ -45,9 +46,24 @@ export default function AdminPage() {
   const [ticketStatusFilter, setTicketStatusFilter] = useState<
     TicketStatus | "all"
   >("all");
+  const [ticketChainFilter, setTicketChainFilter] = useState("all");
+  const [ticketDateFrom, setTicketDateFrom] = useState("");
+  const [ticketDateTo, setTicketDateTo] = useState("");
 
   const [showNotification, setShowNotification] = useState(false);
   const [notification, setNotification] = useState({ type: "", message: "" });
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/users").then((response) => response.json()),
+      fetch("/api/chains").then((response) => response.json()),
+      fetch("/api/tickets").then((response) => response.json()),
+    ]).then(([userData, chainData, ticketData]) => {
+      if (Array.isArray(userData)) setUsers(userData);
+      if (Array.isArray(chainData)) setChains(chainData);
+      if (Array.isArray(ticketData)) setTickets(ticketData);
+    });
+  }, []);
 
   // Funciones de filtrado
   const filteredUsers = useMemo(() => {
@@ -77,9 +93,15 @@ export default function AdminPage() {
     return tickets.filter((ticket) => {
       const matchesStatus =
         ticketStatusFilter === "all" || ticket.estado === ticketStatusFilter;
-      return matchesStatus;
+      const matchesChain = ticketChainFilter === "all" || ticket.cadena === ticketChainFilter;
+      const created = new Date(ticket.createdAt);
+      const matchesFrom = !ticketDateFrom || created >= new Date(`${ticketDateFrom}T00:00:00`);
+      const matchesTo = !ticketDateTo || created <= new Date(`${ticketDateTo}T23:59:59`);
+      return matchesStatus && matchesChain && matchesFrom && matchesTo;
     });
-  }, [tickets, ticketStatusFilter]);
+  }, [tickets, ticketStatusFilter, ticketChainFilter, ticketDateFrom, ticketDateTo]);
+
+  const ticketChains = useMemo(() => [...new Set(tickets.map((ticket) => ticket.cadena))].sort(), [tickets]);
 
   // Alertas de tickets
   const overdueTickets = useMemo(() => {
@@ -93,57 +115,55 @@ export default function AdminPage() {
     });
   }, [tickets]);
 
-  const createUser = () => {
-    if (!newUser.nombre || !newUser.email) {
+  const createUser = async () => {
+    if (!newUser.nombre || !newUser.email || newUser.password.length < 8) {
       showAlert("error", "Completa todos los campos");
       return;
     }
-
-    const user: User = {
-      id: crypto.randomUUID(),
-      nombre: newUser.nombre,
-      email: newUser.email,
-      role: newUser.role as "admin" | "analista",
-      activo: true,
-      createdAt: new Date().toISOString(),
-    };
-
+    const response = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newUser) });
+    const user = await response.json();
+    if (!response.ok) return showAlert("error", user.error ?? "No se pudo crear el usuario");
     setUsers((prev) => [user, ...prev]);
-    setNewUser({ nombre: "", email: "", role: "analista" });
+    setNewUser({ nombre: "", email: "", password: "", role: "analista" });
     showAlert("success", "Usuario creado exitosamente");
   };
 
-  const deleteUser = (id: string) => {
+  const deleteUser = async (id: string) => {
+    const response = await fetch(`/api/users/${id}`, { method: "DELETE" });
+    if (!response.ok) return showAlert("error", (await response.json()).error ?? "No se pudo eliminar");
     setUsers((prev) => prev.filter((u) => u.id !== id));
     showAlert("success", "Usuario eliminado");
   };
 
-  const toggleUserStatus = (id: string) => {
+  const toggleUserStatus = async (id: string) => {
+    const user = users.find((item) => item.id === id);
+    if (!user) return;
+    const response = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !user.activo }) });
+    if (!response.ok) return showAlert("error", (await response.json()).error ?? "No se pudo actualizar");
     setUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, activo: !u.activo } : u)),
     );
   };
 
-  const createChain = () => {
+  const createChain = async () => {
     if (!newChain.nombre) {
       showAlert("error", "Ingresa el nombre de la cadena");
       return;
     }
 
-    const chain: Chain = {
-      id: crypto.randomUUID(),
-      nombre: newChain.nombre,
-      descripcion: newChain.descripcion,
-      activa: true,
-      createdAt: new Date().toISOString(),
-    };
-
+    const response = await fetch("/api/chains", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newChain) });
+    const chain = await response.json();
+    if (!response.ok) return showAlert("error", chain.error ?? "No se pudo crear la cadena");
     setChains((prev) => [chain, ...prev]);
     setNewChain({ nombre: "", descripcion: "" });
     showAlert("success", "Cadena creada exitosamente");
   };
 
-  const toggleChainStatus = (id: string) => {
+  const toggleChainStatus = async (id: string) => {
+    const chain = chains.find((item) => item.id === id);
+    if (!chain) return;
+    const response = await fetch(`/api/chains/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !chain.activa }) });
+    if (!response.ok) return showAlert("error", "No se pudo actualizar la cadena");
     setChains((prev) =>
       prev.map((c) => (c.id === id ? { ...c, activa: !c.activa } : c)),
     );
@@ -170,11 +190,9 @@ export default function AdminPage() {
 
       <div className="p-6 max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div className="bg-linear-to-r from-slate-900 to-slate-800 rounded-2xl shadow-lg p-8 text-white">
-          <h1 className="text-4xl font-bold">Panel de Administración</h1>
-          <p className="text-slate-300 mt-2">
-            Gestiona usuarios, cadenas y monitorea el trabajo de los analistas
-          </p>
+        <div className="flex items-start justify-between gap-4 rounded-2xl bg-slate-950 p-6 text-white shadow-lg sm:p-8">
+          <div><p className="text-sm font-semibold text-blue-300">Centro de control</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Administración</h1><p className="mt-2 text-slate-300">Usuarios, cadenas y operación en una sola vista.</p></div>
+          <UserMenu dark />
         </div>
 
         {/* Alertas críticas */}
@@ -272,6 +290,15 @@ export default function AdminPage() {
                 value={newUser.email}
                 onChange={(e) =>
                   setNewUser((prev) => ({ ...prev, email: e.target.value }))
+                }
+              />
+              <input
+                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition"
+                placeholder="Contraseña temporal (mínimo 8 caracteres)"
+                type="password"
+                value={newUser.password}
+                onChange={(e) =>
+                  setNewUser((prev) => ({ ...prev, password: e.target.value }))
                 }
               />
               <select
@@ -485,6 +512,8 @@ export default function AdminPage() {
                   <th className="text-left py-4 px-4 font-semibold text-slate-700">
                     Descripción
                   </th>
+                  <th className="text-left py-4 px-4 font-semibold text-slate-700">Clientes</th>
+                  <th className="text-left py-4 px-4 font-semibold text-slate-700">Folios</th>
                   <th className="text-left py-4 px-4 font-semibold text-slate-700">
                     Estado
                   </th>
@@ -505,6 +534,8 @@ export default function AdminPage() {
                     <td className="py-4 px-4 text-slate-600 max-w-md truncate">
                       {chain.descripcion}
                     </td>
+                    <td className="py-4 px-4 text-slate-700"><span className="font-bold">{chain.clientCount ?? 0}</span>{chain.clients?.length ? <p className="mt-1 max-w-52 truncate text-xs text-slate-400" title={chain.clients.map((client) => `${client.customerNumber} · ${client.name}`).join("\n")}>{chain.clients.map((client) => client.name).join(", ")}</p> : null}</td>
+                    <td className="py-4 px-4 font-bold text-purple-700">{chain.ticketCount ?? 0}</td>
                     <td className="py-4 px-4">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -537,10 +568,11 @@ export default function AdminPage() {
 
         {/* Seguimiento de Tickets */}
         <div className="bg-white rounded-xl shadow p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div className="flex flex-col gap-4 mb-6">
             <h2 className="text-2xl font-bold text-slate-900">
               Seguimiento de Tickets
             </h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <select
               className="px-4 py-2 border border-slate-300 rounded-lg focus:border-purple-500 focus:outline-none transition"
               value={ticketStatusFilter}
@@ -555,8 +587,16 @@ export default function AdminPage() {
               <option value="all">Todos los estados</option>
               <option value="pendiente">Pendiente</option>
               <option value="seguimiento">Seguimiento</option>
+              <option value="espera_cliente">Espera del cliente</option>
               <option value="cerrado">Cerrado</option>
             </select>
+            <select value={ticketChainFilter} onChange={(e) => setTicketChainFilter(e.target.value)} className="px-4 py-2 border border-slate-300 rounded-lg focus:border-purple-500 focus:outline-none">
+              <option value="all">Todas las cadenas</option>
+              {ticketChains.map((chain) => <option key={chain} value={chain}>{chain}</option>)}
+            </select>
+            <label className="text-xs font-semibold text-slate-600">Desde<input type="date" value={ticketDateFrom} onChange={(e) => setTicketDateFrom(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal" /></label>
+            <label className="text-xs font-semibold text-slate-600">Hasta<input type="date" value={ticketDateTo} onChange={(e) => setTicketDateTo(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal" /></label>
+            </div>
           </div>
 
           <div className="space-y-4">

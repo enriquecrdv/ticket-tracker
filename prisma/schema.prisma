@@ -10,6 +10,7 @@ datasource db {
 enum UserRole {
   ADMIN
   ANALISTA
+  CLIENTE
 }
 
 enum TicketStatus {
@@ -45,6 +46,10 @@ model User {
   active          Boolean         @default(true)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+  clientId        String?         @unique
+  client          Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  chainId         String?
+  chain           Chain?          @relation(fields: [chainId], references: [id], onDelete: SetNull)
   assignedTickets Ticket[]        @relation("AssignedAnalyst")
   createdTickets  Ticket[]        @relation("CreatedByUser")
   comments        TicketComment[]
@@ -64,21 +69,51 @@ model Client {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   tickets        Ticket[]
+  user           User?
+  chainId        String?
+  chain          Chain?   @relation(fields: [chainId], references: [id], onDelete: SetNull)
 
   @@index([name])
+  @@index([chainId, customerNumber])
 }
 
 model Chain {
-  id          String   @id @default(cuid())
-  name        String   @unique @db.VarChar(120)
-  description String?  @db.Text
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  branches    Branch[]
-  tickets     Ticket[]
+  id                  String               @id @default(cuid())
+  name                String               @unique @db.VarChar(120)
+  description         String?              @db.Text
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  branches            Branch[]
+  tickets             Ticket[]
+  clients             Client[]
+  users               User[]
+  commercialCondition CommercialCondition?
 
   @@index([active])
+}
+
+model CommercialCondition {
+  id               String   @id @default(cuid())
+  chainId          String   @unique
+  credit           String?  @db.VarChar(100)
+  contract         String?  @db.VarChar(100)
+  guarantee        String?  @db.VarChar(100)
+  collection       String?  @db.VarChar(100)
+  collectionPortal String?  @db.VarChar(100)
+  segment          String?  @db.VarChar(50)
+  priceList        String?  @db.VarChar(50)
+  discount         String?  @db.VarChar(100)
+  promoList        String?  @db.VarChar(100)
+  continent        String?  @db.VarChar(50)
+  scheme           String?  @db.VarChar(50)
+  creditDays       String?  @db.VarChar(50)
+  pinc             String?  @db.VarChar(100)
+  cashAndCredit    String?  @db.VarChar(100)
+  comments         String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  chain            Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
 }
 
 model Branch {

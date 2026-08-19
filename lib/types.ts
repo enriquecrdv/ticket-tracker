@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "analista";
 
-export type TicketStatus = "pendiente" | "seguimiento" | "cerrado";
+export type TicketStatus = "pendiente" | "seguimiento" | "espera_cliente" | "cerrado";
 
 export interface User {
   id: string;
@@ -17,6 +17,9 @@ export interface Chain {
   descripcion: string;
   activa: boolean;
   createdAt: string;
+  clientCount?: number;
+  ticketCount?: number;
+  clients?: Array<{ customerNumber: string; name: string }>;
 }
 
 export interface TicketComment {

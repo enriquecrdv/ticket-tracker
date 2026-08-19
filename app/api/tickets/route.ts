@@ -1,0 +1,118 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/server-auth";
+import { ticketInclude, toClientTicket, toStaffTicket } from "@/lib/ticket-mappers";
+
+const ticketSchema = z.object({
+  customerNumber: z.union([z.string().trim().regex(/^\d{9}$/), z.literal("")]),
+  branch: z.string().trim().min(1).max(150),
+  storeName: z.string().trim().min(1).max(150),
+  category: z.string().trim().min(1).max(150),
+  subcategory: z.string().trim().min(1).max(150),
+  impact: z.enum(["low", "medium", "high"]),
+  description: z.string().trim().min(5).max(5000),
+  openingDate: z.coerce.date(),
+  confirmNewClient: z.enum(["true", "false"]).default("false"),
+}).refine((data) => data.category === "Alta de clientes" || /^\d{9}$/.test(data.customerNumber), { message: "El código debe tener 9 dígitos.", path: ["customerNumber"] });
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get("q")?.trim();
+  const session = await requireUser();
+
+  if (!session) {
+    return NextResponse.json({ error: "Inicia sesión para consultar tickets." }, { status: 401 });
+  }
+
+  const isClient = session.user.role === "CLIENTE";
+  if (isClient && !session.user.chainId) return NextResponse.json({ error: "La cuenta no está vinculada a una cadena." }, { status: 403 });
+
+  const tickets = await prisma.ticket.findMany({
+    where: isClient
+      ? {
+          chainId: session.user.chainId!,
+          ...(query ? { OR: [{ folio: query }, { client: { customerNumber: query } }] } : {}),
+        }
+      : undefined,
+    include: ticketInclude,
+    orderBy: { createdAt: "desc" },
+    take: isClient ? 50 : 200,
+  });
+
+  return NextResponse.json(
+    isClient ? tickets.map(toClientTicket) : tickets.map(toStaffTicket),
+  );
+}
+
+export async function POST(request: Request) {
+  const session = await requireUser();
+  if (session?.user.role !== "CLIENTE" || !session.user.chainId) {
+    return NextResponse.json({ error: "Inicia sesión como cliente." }, { status: 401 });
+  }
+  const formData = await request.formData();
+  const parsed = ticketSchema.safeParse(Object.fromEntries(
+    [...formData.entries()].filter(([, value]) => typeof value === "string"),
+  ));
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos del ticket inválidos." }, { status: 400 });
+  }
+
+  const data = parsed.data;
+  const code = data.branch.toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 40);
+  const level = { low: "BAJO", medium: "MEDIO", high: "ALTO" } as const;
+
+  const chain = await prisma.chain.findUnique({ where: { id: session.user.chainId } });
+  if (!chain?.active) return NextResponse.json({ error: "Cadena inactiva." }, { status: 403 });
+  const branch = await prisma.branch.upsert({
+    where: { chainId_code: { chainId: chain.id, code } },
+    update: { name: data.branch, active: true },
+    create: { chainId: chain.id, code, name: data.branch },
+  });
+  const pendingHigh = data.category === "Alta de clientes";
+  const accountCode = pendingHigh ? `ALTA-${chain.id.slice(-12)}` : data.customerNumber;
+  let client = await prisma.client.findFirst({ where: { chainId: chain.id, customerNumber: accountCode, active: true } });
+  if (!client) {
+    if (!pendingHigh && data.confirmNewClient !== "true") return NextResponse.json({ error: "Confirma el nombre del nuevo cliente antes de continuar." }, { status: 409 });
+    client = await prisma.client.create({ data: { customerNumber: accountCode, name: data.branch, chainId: chain.id } });
+  }
+
+  const ticket = await prisma.ticket.create({
+    data: {
+      folio: `TKT-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}`,
+      title: `${data.category} - ${client.name}`,
+      description: data.description,
+      category: data.category,
+      subcategory: data.subcategory,
+      impact: level[data.impact],
+      priority: level[data.impact],
+      openingDate: data.openingDate,
+      clientId: client.id,
+      chainId: chain.id,
+      branchId: branch.id,
+      createdByUserId: session.user.id,
+      history: { create: { action: "CREADO", detail: "Ticket creado por el cliente.", userId: session.user.id } },
+    },
+    include: ticketInclude,
+  });
+
+  const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
+  const files = [...formData.entries()].filter(([, value]) => value instanceof File) as [string, File][];
+  const uploadDirectory = path.join(process.cwd(), "storage", "uploads");
+
+  for (const [, file] of files) {
+    if (!file.size || file.size > 5 * 1024 * 1024 || !allowedTypes.has(file.type)) continue;
+    await mkdir(uploadDirectory, { recursive: true });
+    const storageKey = `${ticket.id}-${randomUUID()}${path.extname(file.name)}`;
+    await writeFile(path.join(uploadDirectory, storageKey), Buffer.from(await file.arrayBuffer()));
+    await prisma.attachment.create({
+      data: { ticketId: ticket.id, originalName: file.name, storageKey, mimeType: file.type, sizeBytes: file.size },
+    });
+  }
+
+  return NextResponse.json(toClientTicket(ticket), { status: 201 });
+}
