@@ -36,6 +36,10 @@ export function toStaffTicket(ticket: TicketWithRelations) {
     cliente: ticket.client.name,
     cadena: ticket.chain.name,
     descripcion: ticket.description,
+    categoria: ticket.category,
+    subcategoria: ticket.subcategory,
+    prioridad: ({ BAJO: "baja", MEDIO: "media", ALTO: "alta" } as const)[ticket.priority],
+    alertaAdmin: ticket.adminAlert,
     estado: uiStatus(ticket.status),
     creadoPor: ticket.createdByUser?.name ?? ticket.client.name,
     asignadoA: ticket.assignedTo?.name,
@@ -44,7 +48,7 @@ export function toStaffTicket(ticket: TicketWithRelations) {
     comentarios: ticket.comments.map((comment) => ({
       id: comment.id,
       autor: comment.author.name,
-      autorRole: comment.author.role === "ADMIN" ? "admin" : "analista",
+      autorRole: comment.author.role === "ADMIN" ? "admin" : comment.author.role === "CLIENTE" ? "cliente" : "analista",
       mensaje: comment.message,
       createdAt: comment.createdAt.toISOString(),
     })),
@@ -53,6 +57,13 @@ export function toStaffTicket(ticket: TicketWithRelations) {
       accion: entry.detail ?? entry.action,
       usuario: entry.user?.name ?? "Sistema",
       createdAt: entry.createdAt.toISOString(),
+    })),
+    attachments: ticket.attachments.map((attachment) => ({
+      id: attachment.id,
+      name: attachment.originalName,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      createdAt: attachment.createdAt.toISOString(),
     })),
   };
 }

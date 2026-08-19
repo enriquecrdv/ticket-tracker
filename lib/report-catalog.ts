@@ -27,3 +27,12 @@ export const DEFAULT_REPORT_CATALOG: ReportCategory[] = [
   { id: "equipment", name: "EQUIPOS Y ACTIVOS", active: true, reports: [report("cooling-followup", "SEGUIMIENTO DE FOLIOS EQUIPOS DE ENFRIAMIENTO BEES", [{ key: "beesFolio", label: "FOLIO LEVANTADO EN LA APP DE BEES", type: "text", required: true }, ...description()]), report("equipment-other", "OTRO")] },
   { id: "stock", name: "STOCK Y CATALOGO", active: true, reports: [report("unavailable-product", "PRODUCTO NO DISPONIBLE"), report("wrong-price", "PRECIO INCORRECTO"), report("stock-three-days", "PRODUCTO SIN STOCK MAS DE 3 DIAS"), report("stock-other", "OTRO")] },
 ];
+
+export function mergeReportCatalog(saved: ReportCategory[]): ReportCategory[] {
+  const merged = DEFAULT_REPORT_CATALOG.map((base) => {
+    const current = saved.find((item) => item.id === base.id);
+    if (!current) return base;
+    return { ...base, ...current, reports: [...base.reports.map((baseReport) => current.reports.find((item) => item.id === baseReport.id) ?? baseReport), ...current.reports.filter((item) => !base.reports.some((baseReport) => baseReport.id === item.id))] };
+  });
+  return [...merged, ...saved.filter((item) => !DEFAULT_REPORT_CATALOG.some((base) => base.id === item.id))];
+}

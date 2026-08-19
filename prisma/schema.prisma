@@ -145,6 +145,7 @@ model Ticket {
   subcategory     String          @db.VarChar(150)
   impact          TicketLevel     @default(MEDIO)
   priority        TicketLevel     @default(MEDIO)
+  adminAlert      Boolean         @default(false)
   status          TicketStatus    @default(PENDIENTE)
   openingDate     DateTime        @default(now())
   resolvedAt      DateTime?

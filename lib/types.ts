@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "analista";
+export type UserRole = "admin" | "analista" | "cliente";
 
 export type TicketStatus = "pendiente" | "seguimiento" | "espera_cliente" | "cerrado";
 
@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   activo: boolean;
   createdAt: string;
+  chain?: string;
+  customerNumber?: string;
 }
 
 export interface Chain {
@@ -45,12 +47,24 @@ export interface TicketHistory {
   createdAt: string;
 }
 
+export interface TicketAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface Ticket {
   id: string;
   titulo: string;
   cliente: string;
   cadena: string;
   descripcion: string;
+  categoria: string;
+  subcategoria: string;
+  prioridad: "baja" | "media" | "alta";
+  alertaAdmin: boolean;
   estado: TicketStatus;
   creadoPor: string;
   asignadoA?: string;
@@ -58,4 +72,5 @@ export interface Ticket {
   updatedAt: string;
   comentarios: TicketComment[];
   historial: TicketHistory[];
+  attachments: TicketAttachment[];
 }

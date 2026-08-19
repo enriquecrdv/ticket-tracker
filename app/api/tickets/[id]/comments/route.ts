@@ -17,7 +17,7 @@ export async function POST(
   const ticket = await prisma.ticket.update({
     where: { id },
     data: {
-      assignedToId: session.user.id,
+      ...(session.user.role === "ANALISTA" ? { assignedToId: session.user.id } : {}),
       comments: { create: { message: parsed.data.message, authorId: session.user.id } },
       history: { create: { action: "COMENTARIO", detail: "Se agregó una respuesta.", userId: session.user.id } },
     },

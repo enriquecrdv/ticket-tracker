@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Bell, CheckCheck, X } from "lucide-react";
 
 type NotificationItem = { id: string; message: string; read: boolean; sender: string; createdAt: string };
-export function NotificationsMenu() {
+export function NotificationsMenu({ dark: _dark = false }: { dark?: boolean }) {
+  void _dark;
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const load = () => fetch("/api/notifications").then((response) => response.ok ? response.json() : []).then((data) => { if (Array.isArray(data)) setItems(data); });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/server-auth";
+import { requireAdmin, requireUser } from "@/lib/server-auth";
 
 const toUiChain = (chain: { id: string; name: string; description: string | null; active: boolean; createdAt: Date; _count?: { clients: number; tickets: number }; clients?: Array<{ customerNumber: string; name: string }>; commercialCondition?: Record<string, string | Date | null> | null }) => ({
   id: chain.id,
@@ -16,7 +16,8 @@ const toUiChain = (chain: { id: string; name: string; description: string | null
 });
 
 export async function GET() {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "No autorizado." }, { status: 403 });
+  const session = await requireUser();
+  if (!session || session.user.role === "CLIENTE") return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   const chains = await prisma.chain.findMany({
     include: {
       _count: { select: { clients: true, tickets: true } },

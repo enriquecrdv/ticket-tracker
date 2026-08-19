@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
-import type { ReportCategory, ReportDefinition, ReportField } from "@/lib/report-catalog";
+import { DEFAULT_REPORT_CATALOG, mergeReportCatalog, type ReportCategory, type ReportDefinition, type ReportField } from "@/lib/report-catalog";
 
 const createField = (): ReportField => ({ key: `field-${Date.now()}`, label: "NUEVO CAMPO", type: "text", required: true });
 const createReport = (): ReportDefinition => ({ id: `report-${Date.now()}`, name: "NUEVO REPORTE", active: true, fields: [createField()] });
 
 export function CatalogEditor() {
-  const [catalog, setCatalog] = useState<ReportCategory[]>([]);
+  const [catalog, setCatalog] = useState<ReportCategory[]>(DEFAULT_REPORT_CATALOG);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  useEffect(() => { fetch("/api/report-catalog").then((response) => response.json()).then((data) => { if (Array.isArray(data)) setCatalog(data); }); }, []);
+  useEffect(() => { fetch("/api/report-catalog").then((response) => response.json()).then((data: ReportCategory[]) => { if (Array.isArray(data)) setCatalog(mergeReportCatalog(data)); }); }, []);
   const updateCategory = (index: number, update: (value: ReportCategory) => ReportCategory) => setCatalog((current) => current.map((item, position) => position === index ? update(item) : item));
   const save = async () => { setSaving(true); const response = await fetch("/api/report-catalog", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(catalog) }); const data = await response.json(); setMessage(response.ok ? "Catálogo guardado correctamente." : data.error ?? "No se pudo guardar."); setSaving(false); };
   return <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">

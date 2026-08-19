@@ -43,12 +43,17 @@ export const mockTickets: Ticket[] = [
     cliente: "Cliente 1001",
     cadena: "OXXO",
     descripcion: "El cliente reporta que no ve su pedido reflejado.",
+    categoria: "ENTREGAS Y PEDIDOS",
+    subcategoria: "PEDIDO RETRASADO",
+    prioridad: "media",
+    alertaAdmin: false,
     estado: "pendiente",
     creadoPor: "Cliente 1001",
     asignadoA: "Ana Analista",
     createdAt: "2026-03-09 10:00",
     updatedAt: "2026-03-09 10:00",
     comentarios: [],
+    attachments: [],
     historial: [
       {
         id: "h1",

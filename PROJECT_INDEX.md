@@ -1,6 +1,6 @@
 # Ticket Tracker — índice técnico
 
-Actualizado: 2026-08-18.
+Actualizado: 2026-08-19.
 
 ## Resumen
 
@@ -20,7 +20,7 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | Modelo de datos | `prisma/schema.prisma` | Entidades, enums, relaciones e índices |
 | Datos iniciales | `prisma/seed.ts` | Usuarios, clientes, cadenas, sucursales y tickets de prueba |
 | Administrador | `app/admin/page.tsx` | Centro KAM por módulos: operación, cadenas, equipo, catálogo y reportes |
-| Analista | `app/analista/page.tsx` | Atención, comentarios y estados simulados |
+| Analista | `components/analyst/AnalystWorkspace.tsx` | Cola operativa, adjuntos, cadenas, métricas e informes |
 | Cliente | `components/client/ClientPortal.tsx` | Dashboard y navegación del portal cliente |
 | Alta cliente | `components/client/CreateTicketWizard.tsx` | Ticket normal o alta fiscal guiada con documentos obligatorios |
 | Detalle cliente | `components/client/TicketDetail.tsx` | Conversación, actividad y datos del ticket |
@@ -35,12 +35,12 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | --- | --- | --- |
 | `/` | Público | Login funcional |
 | `/admin` | Solo `ADMIN` | Dashboard conectado: usuarios, cadenas, clientes y tickets |
-| `/analista` | `ADMIN` o `ANALISTA` | Gestión conectada, filtros y solicitud de información |
+| `/analista` | `ADMIN` o `ANALISTA` | Dashboard operativo, folios, cadenas, adjuntos e informes |
 | `/cliente` | Solo `CLIENTE` | Portal diseñado para crear y consultar tickets propios |
 | `/test-cliente` | Redirección | Compatibilidad: redirige a `/cliente` |
 | `/api/auth/[...nextauth]` | Público/sesión | Funcional |
 | `/api/tickets` | Sesión | Crear, consultar y listar tickets según rol/cadena |
-| `/api/tickets/[id]` | Staff | Actualizar estado y asignación |
+| `/api/tickets/[id]` | Staff | Actualizar estado/asignación; ADMIN también prioridad y alerta |
 | `/api/tickets/[id]/comments` | Sesión autorizada | Conversación del ticket |
 | `/api/tickets/[id]/attachments` | Sesión autorizada | Agregar adjuntos al ticket |
 | `/api/tickets/export` | Staff | Exportar solicitudes de alta filtradas a Excel |
@@ -48,8 +48,10 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | `/api/report-catalog` | Sesión/ADMIN | Consultar y administrar el catálogo dinámico de reportes |
 | `/api/notifications` | Sesión/ADMIN | Consultar y enviar notificaciones internas |
 | `/api/notifications/[id]` | Sesión | Marcar una notificación como leída |
-| `/api/users` | Solo `ADMIN` | Listar y crear usuarios |
-| `/api/chains` | Solo `ADMIN` | Listar y crear cadenas |
+| `/api/users` | Solo `ADMIN` | Listar cuentas internas y clientes; crear usuarios internos |
+| `/api/chains` | Staff / `ADMIN` | Staff consulta cadenas y condiciones; solo ADMIN crea |
+| `/api/chains/[id]/clients` | Solo `ADMIN` | Agregar códigos o importar clientes desde Excel `.xlsx` |
+| `/api/chains/[id]/export` | Solo `ADMIN` | Exportar clientes y condiciones comerciales a Excel |
 
 ## Autenticación
 
@@ -76,6 +78,10 @@ PENDIENTE → ASIGNADO → EN_PROGRESO → ESPERA_CLIENTE → RESUELTO → CERRA
 
 Roles: `ADMIN`, `ANALISTA`, `CLIENTE`. Niveles: `BAJO`, `MEDIO`, `ALTO`.
 
+Los folios incluyen una alerta administrativa independiente (`adminAlert`). El
+catálogo combina los reportes base con los personalizados para evitar que las
+categorías iniciales desaparezcan al editar la configuración.
+
 La traducción entre enums de Prisma y estados visuales está centralizada en
 `lib/ticket-mappers.ts`.
 
@@ -85,7 +91,7 @@ La traducción entre enums de Prisma y estados visuales está centralizada en
 - Base de datos: `prisma/schema.prisma`, `lib/prisma.ts`; leer el seed solo si
   cambian datos iniciales.
 - Tickets del cliente: `components/client/` y `app/api/tickets/`.
-- Panel del analista: `app/analista/page.tsx` y APIs de tickets/comentarios.
+- Panel del analista: `components/analyst/AnalystWorkspace.tsx` y APIs de tickets, comentarios, adjuntos y cadenas.
 - Administración: `app/admin/page.tsx`, APIs de usuarios y cadenas.
 - Perfil compartido: `components/shared/UserMenu.tsx` y `app/api/profile/route.ts`.
 - Estilos del login: `components/Login.css` y `components/Login.tsx`.

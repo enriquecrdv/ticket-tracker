@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUser } from "@/lib/server-auth";
-import { DEFAULT_REPORT_CATALOG } from "@/lib/report-catalog";
+import { DEFAULT_REPORT_CATALOG, mergeReportCatalog, type ReportCategory } from "@/lib/report-catalog";
 
 const field = z.object({ key: z.string().min(1).max(80), label: z.string().min(1).max(150), type: z.enum(["text", "date", "email", "number"]), required: z.boolean(), digits: z.number().int().positive().max(30).optional() });
 const report = z.object({ id: z.string().min(1).max(80), name: z.string().min(1).max(150), active: z.boolean(), fields: z.array(field).min(1).max(20) });
@@ -11,7 +11,7 @@ const catalogSchema = z.array(z.object({ id: z.string().min(1).max(80), name: z.
 export async function GET() {
   if (!(await requireUser())) return NextResponse.json({ error: "Inicia sesion para consultar el catalogo." }, { status: 401 });
   const setting = await prisma.appSetting.findUnique({ where: { key: "report-catalog" } });
-  return NextResponse.json(setting?.value ?? DEFAULT_REPORT_CATALOG);
+  return NextResponse.json(setting?.value ? mergeReportCatalog(setting.value as unknown as ReportCategory[]) : DEFAULT_REPORT_CATALOG);
 }
 
 export async function PUT(request: Request) {

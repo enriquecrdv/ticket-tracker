@@ -4,18 +4,20 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/server-auth";
 
-const toUiUser = (user: { id: string; name: string; email: string; role: string; active: boolean; createdAt: Date }) => ({
+const toUiUser = (user: { id: string; name: string; email: string; role: string; active: boolean; createdAt: Date; chain?: { name: string } | null; client?: { customerNumber: string } | null }) => ({
   id: user.id,
   nombre: user.name,
   email: user.email,
-  role: user.role === "ADMIN" ? "admin" : "analista",
+  role: user.role === "ADMIN" ? "admin" : user.role === "CLIENTE" ? "cliente" : "analista",
   activo: user.active,
   createdAt: user.createdAt.toISOString(),
+  chain: user.chain?.name,
+  customerNumber: user.client?.customerNumber,
 });
 
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: "No autorizado." }, { status: 403 });
-  const users = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "ANALISTA"] } }, orderBy: { createdAt: "desc" } });
+  const users = await prisma.user.findMany({ include: { chain: { select: { name: true } }, client: { select: { customerNumber: true } } }, orderBy: { createdAt: "desc" } });
   return NextResponse.json(users.map(toUiUser));
 }
 
