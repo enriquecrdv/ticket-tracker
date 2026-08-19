@@ -20,6 +20,14 @@ export interface Chain {
   clientCount?: number;
   ticketCount?: number;
   clients?: Array<{ customerNumber: string; name: string }>;
+  commercial?: CommercialCondition;
+}
+
+export interface CommercialCondition {
+  credit: string; contract: string; guarantee: string; collection: string;
+  collectionPortal: string; segment: string; priceList: string; discount: string;
+  promoList: string; continent: string; scheme: string; creditDays: string;
+  pinc: string; cashAndCredit: string; comments: string;
 }
 
 export interface TicketComment {

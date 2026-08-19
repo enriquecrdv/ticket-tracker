@@ -38,23 +38,25 @@ enum HistoryAction {
 }
 
 model User {
-  id              String          @id @default(cuid())
-  name            String          @db.VarChar(120)
-  email           String          @unique @db.VarChar(191)
-  passwordHash    String          @db.VarChar(255)
-  role            UserRole        @default(ANALISTA)
-  active          Boolean         @default(true)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  clientId        String?         @unique
-  client          Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  chainId         String?
-  chain           Chain?          @relation(fields: [chainId], references: [id], onDelete: SetNull)
-  assignedTickets Ticket[]        @relation("AssignedAnalyst")
-  createdTickets  Ticket[]        @relation("CreatedByUser")
-  comments        TicketComment[]
-  historyEntries  TicketHistory[]
-  attachments     Attachment[]
+  id                    String          @id @default(cuid())
+  name                  String          @db.VarChar(120)
+  email                 String          @unique @db.VarChar(191)
+  passwordHash          String          @db.VarChar(255)
+  role                  UserRole        @default(ANALISTA)
+  active                Boolean         @default(true)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  clientId              String?         @unique
+  client                Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  chainId               String?
+  chain                 Chain?          @relation(fields: [chainId], references: [id], onDelete: SetNull)
+  assignedTickets       Ticket[]        @relation("AssignedAnalyst")
+  createdTickets        Ticket[]        @relation("CreatedByUser")
+  comments              TicketComment[]
+  historyEntries        TicketHistory[]
+  attachments           Attachment[]
+  receivedNotifications Notification[]  @relation("NotificationRecipient")
+  sentNotifications     Notification[]  @relation("NotificationSender")
 
   @@index([role, active])
 }
@@ -217,4 +219,17 @@ model AppSetting {
   key       String   @id @db.VarChar(100)
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  message     String   @db.Text
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  recipientId String
+  senderId    String?
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender      User?    @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, read, createdAt])
 }

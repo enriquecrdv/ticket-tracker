@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server-auth";
 
-const requestSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(200) });
+const requestSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(200), mode: z.enum(["altas", "all"]).default("altas") });
 
 function fieldsFromDescription(description: string) {
   return Object.fromEntries(description.split("\n").map((line) => {
@@ -20,15 +20,34 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Selecciona al menos un folio válido para exportar." }, { status: 400 });
 
   const tickets = await prisma.ticket.findMany({
-    where: { id: { in: parsed.data.ids }, category: "Alta de clientes" },
-    include: { chain: true, attachments: { orderBy: { createdAt: "asc" } } },
+    where: { id: { in: parsed.data.ids }, ...(parsed.data.mode === "altas" ? { category: "Alta de clientes" } : {}) },
+    include: { chain: true, client: true, assignedTo: true, attachments: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
-  if (!tickets.length) return NextResponse.json({ error: "Los filtros actuales no contienen solicitudes de alta." }, { status: 404 });
+  if (!tickets.length) return NextResponse.json({ error: "Los filtros actuales no contienen folios exportables." }, { status: 404 });
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Ticket Tracker";
   workbook.created = new Date();
+  if (parsed.data.mode === "all") {
+    const reportSheet = workbook.addWorksheet("REPORTE DE FOLIOS", { views: [{ state: "frozen", ySplit: 1 }] });
+    reportSheet.columns = [
+      { header: "FOLIO", key: "folio", width: 20 }, { header: "CADENA", key: "chain", width: 24 }, { header: "CLIENTE", key: "client", width: 28 },
+      { header: "CATEGORIA", key: "category", width: 28 }, { header: "REPORTE", key: "subcategory", width: 32 }, { header: "ESTADO", key: "status", width: 18 },
+      { header: "ANALISTA", key: "analyst", width: 24 }, { header: "PRIORIDAD", key: "priority", width: 15 }, { header: "FECHA CREACION", key: "createdAt", width: 20 },
+      { header: "ULTIMA ACTUALIZACION", key: "updatedAt", width: 22 }, { header: "DIAS SIN ACTUALIZACION", key: "days", width: 23 }, { header: "DESCRIPCION", key: "description", width: 55 },
+      { header: "ARCHIVOS", key: "documents", width: 40 },
+    ];
+    tickets.forEach((ticket) => reportSheet.addRow({ folio: ticket.folio, chain: ticket.chain.name, client: ticket.client.name, category: ticket.category, subcategory: ticket.subcategory, status: ticket.status, analyst: ticket.assignedTo?.name ?? "SIN ASIGNAR", priority: ticket.priority, createdAt: ticket.createdAt, updatedAt: ticket.updatedAt, days: Math.floor((Date.now() - ticket.updatedAt.getTime()) / 86_400_000), description: ticket.description, documents: ticket.attachments.map((item) => item.originalName).join(" | ") }));
+    reportSheet.autoFilter = { from: "A1", to: "M1" };
+    reportSheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: "FFFFFFFF" } }; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } }; cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
+    reportSheet.getRow(1).height = 34;
+    reportSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
+    reportSheet.getColumn("updatedAt").numFmt = "yyyy-mm-dd hh:mm";
+    reportSheet.eachRow((row, rowNumber) => { if (rowNumber > 1) row.alignment = { vertical: "top", wrapText: true }; });
+    const reportBuffer = await workbook.xlsx.writeBuffer();
+    return new Response(new Uint8Array(reportBuffer), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="reporte-folios-${new Date().toISOString().slice(0, 10)}.xlsx"`, "Cache-Control": "no-store" } });
+  }
   const sheet = workbook.addWorksheet("ALTAS DE CLIENTE", { views: [{ state: "frozen", ySplit: 1 }] });
   sheet.columns = [
     { header: "FOLIO", key: "folio", width: 20 }, { header: "CADENA", key: "chain", width: 24 },

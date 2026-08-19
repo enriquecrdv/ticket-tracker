@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/server-auth";
 
-const toUiChain = (chain: { id: string; name: string; description: string | null; active: boolean; createdAt: Date; _count?: { clients: number; tickets: number }; clients?: Array<{ customerNumber: string; name: string }> }) => ({
+const toUiChain = (chain: { id: string; name: string; description: string | null; active: boolean; createdAt: Date; _count?: { clients: number; tickets: number }; clients?: Array<{ customerNumber: string; name: string }>; commercialCondition?: Record<string, string | Date | null> | null }) => ({
   id: chain.id,
   nombre: chain.name,
   descripcion: chain.description ?? "",
@@ -12,6 +12,7 @@ const toUiChain = (chain: { id: string; name: string; description: string | null
   clientCount: chain._count?.clients ?? 0,
   ticketCount: chain._count?.tickets ?? 0,
   clients: chain.clients ?? [],
+  commercial: chain.commercialCondition ? Object.fromEntries(Object.entries(chain.commercialCondition).filter(([key]) => !["id", "chainId", "createdAt", "updatedAt"].includes(key)).map(([key, value]) => [key, value ?? ""])) : undefined,
 });
 
 export async function GET() {
@@ -20,6 +21,7 @@ export async function GET() {
     include: {
       _count: { select: { clients: true, tickets: true } },
       clients: { select: { customerNumber: true, name: true }, orderBy: { name: "asc" }, take: 5 },
+      commercialCondition: true,
     },
     orderBy: { createdAt: "desc" },
   });

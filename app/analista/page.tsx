@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Ticket, TicketStatus } from "@/lib/types";
 import { UserMenu } from "@/components/shared/UserMenu";
+import { NotificationsMenu } from "@/components/shared/NotificationsMenu";
 import { Search, Clock, CheckCircle, AlertCircle, Download } from "lucide-react";
 
 export default function AnalistaPage() {
@@ -163,7 +164,7 @@ export default function AnalistaPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 px-6 py-5">
           <div><p className="text-sm font-semibold text-blue-600">Mesa de soporte</p><h1 className="text-3xl font-bold text-slate-900">Panel del analista</h1><p className="text-slate-600 mt-1">Gestiona y da seguimiento a las solicitudes.</p></div>
-          <UserMenu />
+          <div className="flex items-center gap-2"><NotificationsMenu /><UserMenu /></div>
         </div>
       </div>
 

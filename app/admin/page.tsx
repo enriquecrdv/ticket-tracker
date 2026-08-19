@@ -1,693 +1,78 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { Chain, Ticket, TicketStatus, User } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, AlertTriangle, Bell, Building2, Clock3, Download, Eye, EyeOff, FileText, LayoutDashboard, Plus, Search, Settings2, Trash2, UserRoundCog, Users, X } from "lucide-react";
 import { UserMenu } from "@/components/shared/UserMenu";
 import { CatalogEditor } from "@/components/admin/CatalogEditor";
-import {
-  Users,
-  Link2,
-  AlertCircle,
-  Search,
-  Eye,
-  EyeOff,
-  Trash2,
-  Plus,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-} from "lucide-react";
+import { ChainEditor } from "@/components/admin/ChainEditor";
+import { TicketAssignmentPanel } from "@/components/admin/TicketAssignmentPanel";
+import type { Chain, Ticket, TicketStatus, User } from "@/lib/types";
+
+type Section = "overview" | "users" | "chains" | "catalog" | "tickets";
+const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+const daysOpen = (ticket: Ticket) => Math.floor((Date.now() - new Date(ticket.updatedAt || ticket.createdAt).getTime()) / 86_400_000);
 
 export default function AdminPage() {
+  const [section, setSection] = useState<Section>("overview");
   const [users, setUsers] = useState<User[]>([]);
   const [chains, setChains] = useState<Chain[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
-
-  const [newUser, setNewUser] = useState({
-    nombre: "",
-    email: "",
-    password: "",
-    role: "analista",
-  });
-
-  const [newChain, setNewChain] = useState({
-    nombre: "",
-    descripcion: "",
-  });
-
-  // Filtros y búsqueda
+  const [editingChain, setEditingChain] = useState<Chain | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [newUser, setNewUser] = useState({ nombre: "", email: "", password: "", role: "analista" });
+  const [newChain, setNewChain] = useState({ nombre: "", descripcion: "" });
   const [userSearch, setUserSearch] = useState("");
   const [chainSearch, setChainSearch] = useState("");
-  const [userRoleFilter, setUserRoleFilter] = useState<
-    "all" | "admin" | "analista"
-  >("all");
-  const [chainStatusFilter, setChainStatusFilter] = useState<
-    "all" | "activa" | "inactiva"
-  >("all");
-  const [ticketStatusFilter, setTicketStatusFilter] = useState<
-    TicketStatus | "all"
-  >("all");
-  const [ticketChainFilter, setTicketChainFilter] = useState("all");
-  const [ticketDateFrom, setTicketDateFrom] = useState("");
-  const [ticketDateTo, setTicketDateTo] = useState("");
+  const [chainStatus, setChainStatus] = useState("all");
+  const [ticketStatus, setTicketStatus] = useState<TicketStatus | "all">("all");
+  const [ticketChain, setTicketChain] = useState("all");
+  const [ticketAnalyst, setTicketAnalyst] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [notificationTarget, setNotificationTarget] = useState<User | null>(null);
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [sendingNotification, setSendingNotification] = useState(false);
 
-  const [showNotification, setShowNotification] = useState(false);
-  const [notification, setNotification] = useState({ type: "", message: "" });
+  useEffect(() => { Promise.all([fetch("/api/users").then((r) => r.json()), fetch("/api/chains").then((r) => r.json()), fetch("/api/tickets").then((r) => r.json())]).then(([userData, chainData, ticketData]) => { if (Array.isArray(userData)) setUsers(userData); if (Array.isArray(chainData)) setChains(chainData); if (Array.isArray(ticketData)) setTickets(ticketData); }); }, []);
+  const analysts = users.filter((user) => user.role === "analista");
+  const overdue = useMemo(() => tickets.filter((ticket) => ticket.estado !== "cerrado" && daysOpen(ticket) > 5), [tickets]);
+  const filteredTickets = useMemo(() => tickets.filter((ticket) => {
+    const created = new Date(ticket.createdAt);
+    return (ticketStatus === "all" || ticket.estado === ticketStatus) && (ticketChain === "all" || ticket.cadena === ticketChain) && (ticketAnalyst === "all" || (ticketAnalyst === "unassigned" ? !ticket.asignadoA : ticket.asignadoA === ticketAnalyst)) && (!dateFrom || created >= new Date(`${dateFrom}T00:00:00`)) && (!dateTo || created <= new Date(`${dateTo}T23:59:59`));
+  }), [tickets, ticketStatus, ticketChain, ticketAnalyst, dateFrom, dateTo]);
+  const filteredUsers = users.filter((user) => `${user.nombre} ${user.email}`.toLowerCase().includes(userSearch.toLowerCase()));
+  const filteredChains = chains.filter((chain) => chain.nombre.toLowerCase().includes(chainSearch.toLowerCase()) && (chainStatus === "all" || (chainStatus === "active" ? chain.activa : !chain.activa)));
+  const alert = (type: "success" | "error", text: string) => { setNotice({ type, text }); window.setTimeout(() => setNotice(null), 4500); };
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/users").then((response) => response.json()),
-      fetch("/api/chains").then((response) => response.json()),
-      fetch("/api/tickets").then((response) => response.json()),
-    ]).then(([userData, chainData, ticketData]) => {
-      if (Array.isArray(userData)) setUsers(userData);
-      if (Array.isArray(chainData)) setChains(chainData);
-      if (Array.isArray(ticketData)) setTickets(ticketData);
-    });
-  }, []);
+  async function createUser() { const response = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newUser) }); const data = await response.json(); if (!response.ok) return alert("error", data.error ?? "No se pudo crear el usuario."); setUsers((current) => [data, ...current]); setNewUser({ nombre: "", email: "", password: "", role: "analista" }); alert("success", "Usuario creado correctamente."); }
+  async function toggleUser(user: User) { const response = await fetch(`/api/users/${user.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !user.activo }) }); if (!response.ok) return alert("error", "No se pudo actualizar el usuario."); setUsers((current) => current.map((item) => item.id === user.id ? { ...item, activo: !item.activo } : item)); }
+  async function removeUser(user: User) { if (!window.confirm(`¿Eliminar definitivamente a ${user.nombre}?`)) return; const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" }); if (!response.ok) return alert("error", "No se pudo eliminar el usuario."); setUsers((current) => current.filter((item) => item.id !== user.id)); alert("success", "Usuario eliminado."); }
+  async function createChain() { const response = await fetch("/api/chains", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newChain) }); const data = await response.json(); if (!response.ok) return alert("error", data.error ?? "No se pudo crear la cadena."); setChains((current) => [data, ...current]); setNewChain({ nombre: "", descripcion: "" }); alert("success", "Cadena creada correctamente."); }
+  async function exportAltas() { if (!filteredTickets.length) return alert("error", "No hay folios con los filtros actuales."); const response = await fetch("/api/tickets/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: filteredTickets.map((ticket) => ticket.id), mode: "all" }) }); if (!response.ok) return alert("error", (await response.json()).error ?? "No se pudo generar el reporte."); const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = `reporte-folios-${new Date().toISOString().slice(0, 10)}.xlsx`; link.click(); URL.revokeObjectURL(url); }
+  async function sendNotification() { if (!notificationTarget || !notificationMessage.trim()) return; setSendingNotification(true); const response = await fetch("/api/notifications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipientId: notificationTarget.id, message: notificationMessage }) }); const data = await response.json(); setSendingNotification(false); if (!response.ok) return alert("error", data.error ?? "No se pudo enviar la notificación."); setNotificationTarget(null); setNotificationMessage(""); alert("success", "Notificación enviada al analista."); }
 
-  // Funciones de filtrado
-  const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      const matchesSearch =
-        user.nombre.toLowerCase().includes(userSearch.toLowerCase()) ||
-        user.email.toLowerCase().includes(userSearch.toLowerCase());
-      const matchesRole =
-        userRoleFilter === "all" || user.role === userRoleFilter;
-      return matchesSearch && matchesRole;
-    });
-  }, [users, userSearch, userRoleFilter]);
+  const nav = [{ id: "overview", label: "Resumen", icon: LayoutDashboard }, { id: "tickets", label: "Folios", icon: FileText }, { id: "chains", label: "Cadenas", icon: Building2 }, { id: "users", label: "Equipo", icon: Users }, { id: "catalog", label: "Catálogo", icon: Settings2 }] as const;
+  return <div className="min-h-screen bg-[#f4f7fb] text-slate-900">{notice && <div role="status" className={`fixed right-4 top-4 z-70 max-w-sm rounded-xl px-5 py-3 font-semibold text-white shadow-xl ${notice.type === "success" ? "bg-emerald-600" : "bg-red-600"}`}>{notice.text}</div>}
+    <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950 text-white"><div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-widest text-blue-300">Centro de control KAM</p><h1 className="text-xl font-black">Administración operativa</h1></div><UserMenu dark /></div><nav aria-label="Secciones de administración" className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-3 sm:px-6">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${section === item.id ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-white/10"}`}><item.icon className="h-4 w-4" />{item.label}</button>)}</nav></header>
+    <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+      {section === "tickets" && <TicketAssignmentPanel tickets={filteredTickets} analysts={analysts} onUpdated={(updated) => setTickets((current) => current.map((ticket) => ticket.id === updated.id ? updated : ticket))} />}
+      {section === "overview" && <div className="space-y-7"><section className="rounded-3xl bg-linear-to-br from-slate-900 to-blue-950 p-7 text-white shadow-xl"><p className="text-sm font-bold text-blue-300">Visión ejecutiva</p><h2 className="mt-1 text-3xl font-black">Operación, clientes y equipo</h2><p className="mt-2 max-w-2xl text-slate-300">Detecta riesgos, carga de trabajo y cadenas que necesitan atención sin recorrer toda la aplicación.</p></section>{overdue.length > 0 && <button onClick={() => { setTicketStatus("all"); setSection("tickets"); }} className="flex w-full items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-left"><AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-red-600" /><span><strong className="text-red-900">{overdue.length} folios llevan más de 5 días sin actualización</strong><span className="mt-1 block text-sm text-red-700">Haz clic para revisarlos. Se destacan en rojo dentro de Folios.</span></span></button>}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Kpi label="Usuarios" value={users.length} icon={<Users />} color="blue" onClick={() => setSection("users")} /><Kpi label="Cadenas" value={chains.length} icon={<Building2 />} color="emerald" onClick={() => setSection("chains")} /><Kpi label="Tickets" value={tickets.length} icon={<Clock3 />} color="purple" onClick={() => setSection("tickets")} /><Kpi label="Retrasados" value={overdue.length} icon={<AlertCircle />} color="red" onClick={() => setSection("tickets")} /></section>
+        <section><div className="flex items-end justify-between"><div><p className="text-sm font-bold text-blue-600">Supervisión</p><h2 className="text-2xl font-black">Carga de analistas</h2></div></div><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{analysts.map((analyst) => { const assigned = tickets.filter((ticket) => ticket.asignadoA === analyst.nombre && ticket.estado !== "cerrado"); const delayed = assigned.filter((ticket) => daysOpen(ticket) > 5); const latest = tickets.filter((ticket) => ticket.asignadoA === analyst.nombre).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]; return <article key={analyst.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-blue-50 font-black text-blue-700">{analyst.nombre.slice(0, 2).toUpperCase()}</span><div><h3 className="font-black">{analyst.nombre}</h3><p className="text-xs text-slate-500">{analyst.activo ? "Cuenta activa" : "Cuenta bloqueada"}</p></div></div><button onClick={() => setNotificationTarget(analyst)} aria-label={`Notificar a ${analyst.nombre}`} className="rounded-lg p-2 text-blue-700 hover:bg-blue-50"><Bell className="h-5 w-5" /></button></div><div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Abiertos" value={assigned.length} /><Metric label="Con alerta" value={delayed.length} danger={delayed.length > 0} /></div><p className="mt-4 text-xs text-slate-500">Último movimiento: {latest ? new Date(latest.updatedAt).toLocaleString("es-MX") : "Sin actividad registrada"}</p><button onClick={() => { setTicketAnalyst(analyst.nombre); setSection("tickets"); }} className="mt-4 text-sm font-bold text-blue-700">Ver folios asignados →</button></article>; })}</div></section></div>}
 
-  const filteredChains = useMemo(() => {
-    return chains.filter((chain) => {
-      const matchesSearch = chain.nombre
-        .toLowerCase()
-        .includes(chainSearch.toLowerCase());
-      const matchesStatus =
-        chainStatusFilter === "all" ||
-        (chainStatusFilter === "activa" ? chain.activa : !chain.activa);
-      return matchesSearch && matchesStatus;
-    });
-  }, [chains, chainSearch, chainStatusFilter]);
+      {section === "users" && <div className="space-y-6"><SectionTitle eyebrow="Equipo" title="Usuarios y analistas" description="Crea accesos, bloquea cuentas y revisa quién tiene carga asignada." /><section className="grid gap-6 lg:grid-cols-[360px_1fr]"><div className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-black">Crear usuario</h3><div className="mt-4 space-y-3"><input className={inputClass} placeholder="Nombre completo" value={newUser.nombre} onChange={(e) => setNewUser({ ...newUser, nombre: e.target.value })} /><input type="email" className={inputClass} placeholder="correo@empresa.com" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} /><input type="password" className={inputClass} placeholder="Contraseña temporal, mínimo 8 caracteres" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} /><select className={inputClass} value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}><option value="analista">Analista</option><option value="admin">Administrador</option></select><button onClick={createUser} disabled={!newUser.nombre || !newUser.email || newUser.password.length < 8} className="w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:opacity-40"><Plus className="mr-2 inline h-4 w-4" />Crear usuario</button></div></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="relative mb-4"><Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" /><input className={`${inputClass} pl-10`} placeholder="Buscar por nombre o correo" value={userSearch} onChange={(e) => setUserSearch(e.target.value)} /></div><div className="space-y-2">{filteredUsers.map((user) => <div key={user.id} className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center"><div><p className="font-bold">{user.nombre}</p><p className="text-sm text-slate-500">{user.email} · {user.role}</p></div><div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${user.activo ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{user.activo ? "Activo" : "Bloqueado"}</span>{user.role === "analista" && <button onClick={() => setNotificationTarget(user)} className="rounded-lg p-2 text-blue-700 hover:bg-blue-50" title="Enviar notificación"><Bell className="h-4 w-4" /></button>}<button onClick={() => toggleUser(user)} className="rounded-lg p-2 hover:bg-slate-100" title={user.activo ? "Bloquear" : "Activar"}>{user.activo ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button><button onClick={() => removeUser(user)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Eliminar"><Trash2 className="h-4 w-4" /></button></div></div>)}</div></div></section></div>}
 
-  const filteredTickets = useMemo(() => {
-    return tickets.filter((ticket) => {
-      const matchesStatus =
-        ticketStatusFilter === "all" || ticket.estado === ticketStatusFilter;
-      const matchesChain = ticketChainFilter === "all" || ticket.cadena === ticketChainFilter;
-      const created = new Date(ticket.createdAt);
-      const matchesFrom = !ticketDateFrom || created >= new Date(`${ticketDateFrom}T00:00:00`);
-      const matchesTo = !ticketDateTo || created <= new Date(`${ticketDateTo}T23:59:59`);
-      return matchesStatus && matchesChain && matchesFrom && matchesTo;
-    });
-  }, [tickets, ticketStatusFilter, ticketChainFilter, ticketDateFrom, ticketDateTo]);
+      {section === "chains" && <div className="space-y-6"><SectionTitle eyebrow="Cartera" title="Cadenas y clientes" description="Administra códigos, condiciones comerciales, estado y riesgo de cada cadena." /><section className="grid gap-6 lg:grid-cols-[360px_1fr]"><div className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-black">Agregar cadena</h3><div className="mt-4 space-y-3"><input className={inputClass} placeholder="Nombre de la cadena" value={newChain.nombre} onChange={(e) => setNewChain({ ...newChain, nombre: e.target.value })} /><textarea className={`${inputClass} resize-none`} rows={4} placeholder="Descripción y contexto comercial" value={newChain.descripcion} onChange={(e) => setNewChain({ ...newChain, descripcion: e.target.value })} /><button onClick={createChain} disabled={!newChain.nombre.trim()} className="w-full rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white disabled:opacity-40"><Plus className="mr-2 inline h-4 w-4" />Crear cadena</button></div></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px]"><div className="relative"><Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" /><input className={`${inputClass} pl-10`} placeholder="Buscar cadena" value={chainSearch} onChange={(e) => setChainSearch(e.target.value)} /></div><select className={inputClass} value={chainStatus} onChange={(e) => setChainStatus(e.target.value)}><option value="all">Todas</option><option value="active">Activas</option><option value="inactive">Inactivas</option></select></div><div className="space-y-3">{filteredChains.map((chain) => <article key={chain.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><div className="flex items-center gap-2"><h3 className="font-black">{chain.nombre}</h3><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${chain.activa ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{chain.activa ? "Activa" : "Inactiva"}</span></div><p className="mt-1 text-sm text-slate-500">{chain.descripcion || "Sin descripción"}</p><p className="mt-3 text-sm"><strong>{chain.clientCount ?? 0}</strong> códigos · <strong>{chain.ticketCount ?? 0}</strong> folios</p></div><button onClick={() => setEditingChain(chain)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white"><UserRoundCog className="h-4 w-4" />Editar y administrar</button></div></article>)}</div></div></section></div>}
 
-  const ticketChains = useMemo(() => [...new Set(tickets.map((ticket) => ticket.cadena))].sort(), [tickets]);
+      {section === "catalog" && <div className="space-y-6"><SectionTitle eyebrow="Configuración" title="Catálogo del portal" description="Define qué reportes puede levantar el cliente y qué información debe capturar." /><CatalogEditor /></div>}
 
-  // Alertas de tickets
-  const overdueTickets = useMemo(() => {
-    return tickets.filter((ticket) => {
-      const createdDate = new Date(ticket.createdAt);
-      const now = new Date();
-      const daysDiff = Math.floor(
-        (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      return daysDiff > 5 && ticket.estado !== "cerrado";
-    });
-  }, [tickets]);
-
-  const createUser = async () => {
-    if (!newUser.nombre || !newUser.email || newUser.password.length < 8) {
-      showAlert("error", "Completa todos los campos");
-      return;
-    }
-    const response = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newUser) });
-    const user = await response.json();
-    if (!response.ok) return showAlert("error", user.error ?? "No se pudo crear el usuario");
-    setUsers((prev) => [user, ...prev]);
-    setNewUser({ nombre: "", email: "", password: "", role: "analista" });
-    showAlert("success", "Usuario creado exitosamente");
-  };
-
-  const deleteUser = async (id: string) => {
-    const response = await fetch(`/api/users/${id}`, { method: "DELETE" });
-    if (!response.ok) return showAlert("error", (await response.json()).error ?? "No se pudo eliminar");
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    showAlert("success", "Usuario eliminado");
-  };
-
-  const toggleUserStatus = async (id: string) => {
-    const user = users.find((item) => item.id === id);
-    if (!user) return;
-    const response = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !user.activo }) });
-    if (!response.ok) return showAlert("error", (await response.json()).error ?? "No se pudo actualizar");
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, activo: !u.activo } : u)),
-    );
-  };
-
-  const createChain = async () => {
-    if (!newChain.nombre) {
-      showAlert("error", "Ingresa el nombre de la cadena");
-      return;
-    }
-
-    const response = await fetch("/api/chains", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newChain) });
-    const chain = await response.json();
-    if (!response.ok) return showAlert("error", chain.error ?? "No se pudo crear la cadena");
-    setChains((prev) => [chain, ...prev]);
-    setNewChain({ nombre: "", descripcion: "" });
-    showAlert("success", "Cadena creada exitosamente");
-  };
-
-  const toggleChainStatus = async (id: string) => {
-    const chain = chains.find((item) => item.id === id);
-    if (!chain) return;
-    const response = await fetch(`/api/chains/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !chain.activa }) });
-    if (!response.ok) return showAlert("error", "No se pudo actualizar la cadena");
-    setChains((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, activa: !c.activa } : c)),
-    );
-  };
-
-  const showAlert = (type: string, message: string) => {
-    setNotification({ type, message });
-    setShowNotification(true);
-    setTimeout(() => setShowNotification(false), 3000);
-  };
-
-  return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100">
-      {/* Notificación */}
-      {showNotification && (
-        <div
-          className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${
-            notification.type === "success" ? "bg-emerald-500" : "bg-red-500"
-          }`}
-        >
-          {notification.message}
-        </div>
-      )}
-
-      <div className="p-6 max-w-7xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 rounded-2xl bg-slate-950 p-6 text-white shadow-lg sm:p-8">
-          <div><p className="text-sm font-semibold text-blue-300">Centro de control</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Administración</h1><p className="mt-2 text-slate-300">Usuarios, cadenas y operación en una sola vista.</p></div>
-          <UserMenu dark />
-        </div>
-
-        {/* Alertas críticas */}
-        {overdueTickets.length > 0 && (
-          <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 flex items-start gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-red-900">
-                ⚠️ {overdueTickets.length} ticket(s) sin atender por más de 5
-                días
-              </p>
-              <p className="text-sm text-red-700 mt-1">
-                Se requiere atención inmediata
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* KPIs */}
-        <div className="grid md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-semibold">Usuarios</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">
-                  {users.length}
-                </p>
-              </div>
-              <Users className="w-10 h-10 text-blue-500 opacity-20" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6 border-l-4 border-emerald-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-semibold">Cadenas</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">
-                  {chains.length}
-                </p>
-              </div>
-              <Link2 className="w-10 h-10 text-emerald-500 opacity-20" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6 border-l-4 border-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-semibold">Tickets</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">
-                  {tickets.length}
-                </p>
-              </div>
-              <Clock className="w-10 h-10 text-purple-500 opacity-20" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-semibold">
-                  Retrasados
-                </p>
-                <p className="text-3xl font-bold text-red-600 mt-1">
-                  {overdueTickets.length}
-                </p>
-              </div>
-              <AlertCircle className="w-10 h-10 text-red-500 opacity-20" />
-            </div>
-          </div>
-        </div>
-
-        {/* Formularios de creación */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Plus className="w-5 h-5 text-blue-600" />
-              <h2 className="text-xl font-semibold text-slate-900">
-                Crear usuario
-              </h2>
-            </div>
-
-            <div className="space-y-3">
-              <input
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition"
-                placeholder="Nombre completo"
-                value={newUser.nombre}
-                onChange={(e) =>
-                  setNewUser((prev) => ({ ...prev, nombre: e.target.value }))
-                }
-              />
-              <input
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition"
-                placeholder="Correo electrónico"
-                type="email"
-                value={newUser.email}
-                onChange={(e) =>
-                  setNewUser((prev) => ({ ...prev, email: e.target.value }))
-                }
-              />
-              <input
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition"
-                placeholder="Contraseña temporal (mínimo 8 caracteres)"
-                type="password"
-                value={newUser.password}
-                onChange={(e) =>
-                  setNewUser((prev) => ({ ...prev, password: e.target.value }))
-                }
-              />
-              <select
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition"
-                value={newUser.role}
-                onChange={(e) =>
-                  setNewUser((prev) => ({ ...prev, role: e.target.value }))
-                }
-              >
-                <option value="analista">Analista</option>
-                <option value="admin">Administrador</option>
-              </select>
-
-              <button
-                onClick={createUser}
-                className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-lg font-semibold transition"
-              >
-                + Crear usuario
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Plus className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-xl font-semibold text-slate-900">
-                Crear cadena
-              </h2>
-            </div>
-
-            <div className="space-y-3">
-              <input
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-emerald-500 focus:outline-none transition"
-                placeholder="Nombre de la cadena"
-                value={newChain.nombre}
-                onChange={(e) =>
-                  setNewChain((prev) => ({ ...prev, nombre: e.target.value }))
-                }
-              />
-              <textarea
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:border-emerald-500 focus:outline-none transition resize-none"
-                placeholder="Descripción"
-                rows={3}
-                value={newChain.descripcion}
-                onChange={(e) =>
-                  setNewChain((prev) => ({
-                    ...prev,
-                    descripcion: e.target.value,
-                  }))
-                }
-              />
-              <button
-                onClick={createChain}
-                className="w-full bg-linear-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white px-4 py-3 rounded-lg font-semibold transition"
-              >
-                + Crear cadena
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabla de Usuarios */}
-        <CatalogEditor />
-
-        {/* Tabla de Usuarios */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <h2 className="text-2xl font-bold text-slate-900">Usuarios</h2>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-                <input
-                  className="pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none transition"
-                  placeholder="Buscar usuario..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                />
-              </div>
-              <select
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none transition"
-                value={userRoleFilter}
-                onChange={(e) =>
-                  setUserRoleFilter(
-                    e.target.value as "all" | "admin" | "analista",
-                  )
-                }
-              >
-                <option value="all">Todos los roles</option>
-                <option value="admin">Administrador</option>
-                <option value="analista">Analista</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Nombre
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Correo
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Rol
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Estado
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-slate-200 hover:bg-slate-50 transition"
-                  >
-                    <td className="py-4 px-4 font-medium text-slate-900">
-                      {user.nombre}
-                    </td>
-                    <td className="py-4 px-4 text-slate-600">{user.email}</td>
-                    <td className="py-4 px-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          user.role === "admin"
-                            ? "bg-purple-100 text-purple-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {user.role === "admin" ? "Administrador" : "Analista"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          user.activo
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {user.activo ? "Activo" : "Inactivo"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => toggleUserStatus(user.id)}
-                          className="p-2 rounded-lg hover:bg-slate-100 transition text-slate-600 hover:text-slate-900"
-                          title={user.activo ? "Desactivar" : "Activar"}
-                        >
-                          {user.activo ? (
-                            <Eye className="w-4 h-4" />
-                          ) : (
-                            <EyeOff className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => deleteUser(user.id)}
-                          className="p-2 rounded-lg hover:bg-red-50 transition text-red-600 hover:text-red-700"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Tabla de Cadenas */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <h2 className="text-2xl font-bold text-slate-900">Cadenas</h2>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-                <input
-                  className="pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:border-emerald-500 focus:outline-none transition"
-                  placeholder="Buscar cadena..."
-                  value={chainSearch}
-                  onChange={(e) => setChainSearch(e.target.value)}
-                />
-              </div>
-              <select
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:border-emerald-500 focus:outline-none transition"
-                value={chainStatusFilter}
-                onChange={(e) =>
-                  setChainStatusFilter(
-                    e.target.value as "all" | "activa" | "inactiva",
-                  )
-                }
-              >
-                <option value="all">Todas</option>
-                <option value="activa">Activas</option>
-                <option value="inactiva">Inactivas</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Nombre
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Descripción
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">Clientes</th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">Folios</th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Estado
-                  </th>
-                  <th className="text-left py-4 px-4 font-semibold text-slate-700">
-                    Acción
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredChains.map((chain) => (
-                  <tr
-                    key={chain.id}
-                    className="border-b border-slate-200 hover:bg-slate-50 transition"
-                  >
-                    <td className="py-4 px-4 font-medium text-slate-900">
-                      {chain.nombre}
-                    </td>
-                    <td className="py-4 px-4 text-slate-600 max-w-md truncate">
-                      {chain.descripcion}
-                    </td>
-                    <td className="py-4 px-4 text-slate-700"><span className="font-bold">{chain.clientCount ?? 0}</span>{chain.clients?.length ? <p className="mt-1 max-w-52 truncate text-xs text-slate-400" title={chain.clients.map((client) => `${client.customerNumber} · ${client.name}`).join("\n")}>{chain.clients.map((client) => client.name).join(", ")}</p> : null}</td>
-                    <td className="py-4 px-4 font-bold text-purple-700">{chain.ticketCount ?? 0}</td>
-                    <td className="py-4 px-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          chain.activa
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {chain.activa ? "Activa" : "Inactiva"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <button
-                        onClick={() => toggleChainStatus(chain.id)}
-                        className={`px-4 py-2 rounded-lg font-semibold transition ${
-                          chain.activa
-                            ? "bg-slate-200 text-slate-800 hover:bg-slate-300"
-                            : "bg-emerald-600 text-white hover:bg-emerald-700"
-                        }`}
-                      >
-                        {chain.activa ? "Desactivar" : "Activar"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Seguimiento de Tickets */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <div className="flex flex-col gap-4 mb-6">
-            <h2 className="text-2xl font-bold text-slate-900">
-              Seguimiento de Tickets
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <select
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:border-purple-500 focus:outline-none transition"
-              value={ticketStatusFilter}
-              onChange={(e) =>
-                setTicketStatusFilter(
-                  e.target.value as
-                    | "all"
-                    | TicketStatus,
-                )
-              }
-            >
-              <option value="all">Todos los estados</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="seguimiento">Seguimiento</option>
-              <option value="espera_cliente">Espera del cliente</option>
-              <option value="cerrado">Cerrado</option>
-            </select>
-            <select value={ticketChainFilter} onChange={(e) => setTicketChainFilter(e.target.value)} className="px-4 py-2 border border-slate-300 rounded-lg focus:border-purple-500 focus:outline-none">
-              <option value="all">Todas las cadenas</option>
-              {ticketChains.map((chain) => <option key={chain} value={chain}>{chain}</option>)}
-            </select>
-            <label className="text-xs font-semibold text-slate-600">Desde<input type="date" value={ticketDateFrom} onChange={(e) => setTicketDateFrom(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal" /></label>
-            <label className="text-xs font-semibold text-slate-600">Hasta<input type="date" value={ticketDateTo} onChange={(e) => setTicketDateTo(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal" /></label>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {filteredTickets.map((ticket) => {
-              const createdDate = new Date(ticket.createdAt);
-              const now = new Date();
-              const daysDiff = Math.floor(
-                (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24),
-              );
-              const isOverdue = daysDiff > 5 && ticket.estado !== "cerrado";
-
-              return (
-                <div
-                  key={ticket.id}
-                  className={`border rounded-xl p-4 transition ${
-                    isOverdue
-                      ? "border-red-300 bg-red-50"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-900">
-                          {ticket.titulo}
-                        </p>
-                        {isOverdue && (
-                          <AlertTriangle className="w-5 h-5 text-red-600" />
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-600 mt-1">
-                        ID: {ticket.id} · Asignado a:{" "}
-                        <span className="font-medium">
-                          {ticket.asignadoA || "Sin asignar"}
-                        </span>
-                      </p>
-                      <p className="text-sm text-slate-500 mt-0.5">
-                        Días desde creación: {daysDiff}
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2 items-center">
-                      {ticket.estado === "cerrado" ? (
-                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold flex items-center gap-1">
-                          <CheckCircle className="w-4 h-4" /> Completado
-                        </span>
-                      ) : isOverdue ? (
-                        <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-semibold flex items-center gap-1">
-                          <AlertCircle className="w-4 h-4" /> Retrasado
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold flex items-center gap-1">
-                          <Clock className="w-4 h-4" /> {ticket.estado}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {ticket.historial && ticket.historial.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-200">
-                      <p className="font-medium text-slate-900 mb-2 text-sm">
-                        Historial
-                      </p>
-                      <div className="space-y-2">
-                        {ticket.historial.slice(0, 2).map((item) => (
-                          <div
-                            key={item.id}
-                            className="text-xs text-slate-600 flex items-center gap-2"
-                          >
-                            <span className="font-medium">{item.usuario}:</span>
-                            <span>{item.accion}</span>
-                            <span className="text-slate-500">
-                              {new Date(item.createdAt).toLocaleDateString(
-                                "es-ES",
-                              )}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+      {section === "tickets" && <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><SectionTitle eyebrow="Operación" title="Supervisión de folios" description="Filtra por analista, cadena, fecha y estado. Los folios sin actualización por más de 5 días se muestran en rojo." /><button onClick={exportAltas} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white"><Download className="h-4 w-4" />Descargar Excel</button></div><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><select className={inputClass} value={ticketAnalyst} onChange={(e) => setTicketAnalyst(e.target.value)}><option value="all">Todos los analistas</option><option value="unassigned">Sin asignar</option>{analysts.map((analyst) => <option key={analyst.id} value={analyst.nombre}>{analyst.nombre}</option>)}</select><select className={inputClass} value={ticketChain} onChange={(e) => setTicketChain(e.target.value)}><option value="all">Todas las cadenas</option>{chains.map((chain) => <option key={chain.id} value={chain.nombre}>{chain.nombre}</option>)}</select><select className={inputClass} value={ticketStatus} onChange={(e) => setTicketStatus(e.target.value as TicketStatus | "all")}><option value="all">Todos los estados</option><option value="pendiente">Pendiente</option><option value="seguimiento">Seguimiento</option><option value="espera_cliente">Espera del cliente</option><option value="cerrado">Cerrado</option></select><label className="text-xs font-bold text-slate-600">Desde<input type="date" className={`${inputClass} mt-1`} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label><label className="text-xs font-bold text-slate-600">Hasta<input type="date" className={`${inputClass} mt-1`} value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label></div><p className="mt-4 text-sm font-semibold text-slate-500">{filteredTickets.length} folios encontrados</p><div className="mt-4 space-y-3">{filteredTickets.map((ticket) => { const delayed = ticket.estado !== "cerrado" && daysOpen(ticket) > 5; return <article key={ticket.id} className={`rounded-2xl border p-4 ${delayed ? "border-red-300 bg-red-50" : "border-slate-200 bg-white"}`}><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-black text-blue-700">{ticket.id}</span>{delayed && <span className="rounded-full bg-red-700 px-2.5 py-1 text-xs font-black text-white">ALERTA · {daysOpen(ticket)} DÍAS</span>}</div><h3 className="mt-2 font-black">{ticket.titulo}</h3><p className="mt-1 text-sm text-slate-600">{ticket.cadena} · {ticket.cliente}</p></div><div className="text-right text-sm"><p className="font-bold">{ticket.asignadoA ?? "Sin asignar"}</p><p className="text-slate-500">{ticket.estado.replace("_", " ")}</p><p className="mt-1 text-xs text-slate-400">Actualizado {new Date(ticket.updatedAt).toLocaleDateString("es-MX")}</p></div></div></article>; })}{filteredTickets.length === 0 && <div className="py-12 text-center text-slate-500">No hay folios con estos filtros.</div>}</div></section></div>}
+    </main>
+    {editingChain && <ChainEditor chain={editingChain} onClose={() => setEditingChain(null)} onSaved={(updated) => { setChains((current) => current.map((item) => item.id === updated.id ? updated : item)); setEditingChain(updated); alert("success", "Cadena actualizada."); }} onDeleted={(id) => { setChains((current) => current.filter((item) => item.id !== id)); setTickets((current) => current.filter((ticket) => ticket.cadena !== editingChain.nombre)); alert("success", "Cadena y datos relacionados eliminados."); }} />}
+    {notificationTarget && <div className="fixed inset-0 z-60 grid place-items-center bg-slate-950/60 p-4"><div role="dialog" aria-modal="true" className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-sm font-bold text-blue-600">Notificación interna</p><h2 className="text-xl font-black">{notificationTarget.nombre}</h2></div><button onClick={() => setNotificationTarget(null)} aria-label="Cerrar"><X /></button></div><textarea autoFocus rows={5} value={notificationMessage} onChange={(e) => setNotificationMessage(e.target.value)} placeholder="Describe la prioridad, seguimiento o acción requerida" className={`${inputClass} mt-5 resize-none`} /><button onClick={sendNotification} disabled={sendingNotification || !notificationMessage.trim()} className="mt-4 w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:opacity-40">{sendingNotification ? "Enviando..." : "Enviar al analista"}</button></div></div>}
+  </div>;
 }
+
+function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div><p className="text-sm font-bold text-blue-600">{eyebrow}</p><h2 className="text-3xl font-black tracking-tight text-slate-950">{title}</h2><p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p></div>; }
+function Kpi({ label, value, icon, color, onClick }: { label: string; value: number; icon: React.ReactNode; color: "blue" | "emerald" | "purple" | "red"; onClick: () => void }) { const tones = { blue: "bg-blue-50 text-blue-700", emerald: "bg-emerald-50 text-emerald-700", purple: "bg-purple-50 text-purple-700", red: "bg-red-50 text-red-700" }; return <button onClick={onClick} className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><div><p className="text-sm font-bold text-slate-500">{label}</p><p className="mt-1 text-3xl font-black">{value}</p><p className="mt-2 text-xs font-bold text-blue-600">Abrir sección →</p></div><span className={`grid h-12 w-12 place-items-center rounded-xl [&>svg]:h-6 [&>svg]:w-6 ${tones[color]}`}>{icon}</span></div></button>; }
+function Metric({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) { return <div className={`rounded-xl p-3 ${danger ? "bg-red-50" : "bg-slate-50"}`}><p className="text-xs font-bold text-slate-500">{label}</p><p className={`mt-1 text-2xl font-black ${danger ? "text-red-700" : "text-slate-900"}`}>{value}</p></div>; }
