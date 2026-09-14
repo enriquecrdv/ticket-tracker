@@ -144,7 +144,25 @@ export function CreateTicketWizard({
   });
   const [catalog, setCatalog] = useState<ReportCategory[]>(DEFAULT_REPORT_CATALOG);
 
-  useEffect(() => { fetch("/api/report-catalog").then((response) => response.json()).then((data: ReportCategory[]) => { if (Array.isArray(data)) setCatalog(data); }); }, []);
+  useEffect(() => {
+    let active = true;
+    const loadCatalog = async () => {
+      const response = await fetch("/api/report-catalog", { cache: "no-store" });
+      const data = await response.json().catch(() => null) as ReportCategory[] | null;
+      if (active && response.ok && Array.isArray(data)) setCatalog(data);
+    };
+    const refreshVisibleCatalog = () => {
+      if (document.visibilityState === "visible") void loadCatalog();
+    };
+    void loadCatalog();
+    window.addEventListener("focus", loadCatalog);
+    document.addEventListener("visibilitychange", refreshVisibleCatalog);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", loadCatalog);
+      document.removeEventListener("visibilitychange", refreshVisibleCatalog);
+    };
+  }, []);
   const activeCategories = catalog.filter((category) => category.active);
   const selectedCategory = activeCategories.find((category) => category.name === draft.category);
   const selectedReport = selectedCategory?.reports.find((report) => report.name === draft.subcategory && report.active);
@@ -242,13 +260,24 @@ export function CreateTicketWizard({
       if (draft.taxFile) body.append("constancia-fiscal", draft.taxFile);
     }
     const response = await fetch("/api/tickets", { method: "POST", body });
-    const result = await response.json();
+    const responseText = await response.text();
+    let result: { error?: string } & Record<string, unknown>;
+    try {
+      result = responseText ? JSON.parse(responseText) as { error?: string } & Record<string, unknown> : {};
+    } catch {
+      result = { error: "El servidor devolvió una respuesta inválida. Reinicia el servidor e intenta nuevamente." };
+    }
     if (!response.ok) {
-      setError(result.error ?? "No se pudo crear el ticket.");
+      setError(result.error ?? `No se pudo crear el ticket (error ${response.status}).`);
       setSending(false);
       return;
     }
-    onCreated(result);
+    if (!responseText) {
+      setError("El servidor no confirmó la creación del ticket. Intenta nuevamente.");
+      setSending(false);
+      return;
+    }
+    onCreated(result as unknown as Parameters<typeof onCreated>[0]);
   }
 
   const labels = draft.isNewAccount

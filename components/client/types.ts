@@ -40,6 +40,6 @@ export interface ClientTicket {
 export const STATUS = {
   en_proceso: { label: "En proceso", className: "bg-blue-50 text-blue-700 ring-blue-600/15" },
   en_espera_cliente: { label: "Requiere tu atención", className: "bg-amber-50 text-amber-700 ring-amber-600/20" },
-  resuelto: { label: "Resuelto", className: "bg-emerald-50 text-emerald-700 ring-emerald-600/15" },
-  cerrado: { label: "Cerrado", className: "bg-slate-100 text-slate-600 ring-slate-500/15" },
+  resuelto: { label: "Cerrado", className: "bg-emerald-50 text-emerald-700 ring-emerald-600/15" },
+  cerrado: { label: "Cerrado", className: "bg-emerald-50 text-emerald-700 ring-emerald-600/15" },
 } satisfies Record<ClientTicketStatus, { label: string; className: string }>;

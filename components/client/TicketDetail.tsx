@@ -1,29 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Building2, CalendarDays, FileUp, Paperclip, Send, UserRound } from "lucide-react";
 import { ClientTicket, STATUS } from "./types";
 
 export function TicketDetail({ ticket, onBack, onUpdated }: { ticket: ClientTicket; onBack: () => void; onUpdated: (ticket: ClientTicket) => void }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyError, setReplyError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const status = STATUS[ticket.status];
 
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      const response = await fetch(`/api/tickets/${ticket.databaseId}/comments`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as ClientTicket | null;
+      if (active && response.ok && data?.databaseId) onUpdated(data);
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const interval = window.setInterval(refresh, 8000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [ticket.databaseId, onUpdated]);
+
   async function sendReply() {
     if (!message.trim()) return;
     setSending(true);
-    const response = await fetch(`/api/tickets/${ticket.databaseId}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-    if (response.ok) {
-      onUpdated(await response.json());
-      setMessage("");
+    setReplyError("");
+    try {
+      const response = await fetch(`/api/tickets/${ticket.databaseId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await response.json().catch(() => null) as ClientTicket | { error?: string } | null;
+      if (response.ok && data && "databaseId" in data) {
+        onUpdated(data);
+        setMessage("");
+      } else {
+        setReplyError(data && "error" in data ? data.error ?? "No se pudo guardar el comentario." : "El servidor no confirmó el comentario.");
+      }
+    } catch {
+      setReplyError("No se pudo conectar con el servidor. Intenta nuevamente.");
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   }
 
   async function uploadFiles(files: FileList | null) {
@@ -76,23 +107,27 @@ export function TicketDetail({ ticket, onBack, onUpdated }: { ticket: ClientTick
               <div className="mt-4 space-y-2">{ticket.attachments?.map((attachment) => <div key={attachment.id} className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 text-sm text-slate-700"><Paperclip className="h-4 w-4 text-blue-600" /><span className="min-w-0 flex-1 truncate font-medium">{attachment.name}</span><span className="text-xs text-slate-400">{(attachment.sizeBytes / 1024).toFixed(0)} KB</span></div>)}{!ticket.attachments?.length && <p className="text-sm text-slate-500">Todavía no hay archivos adjuntos.</p>}</div>
             </div>
 
-            <h2 className="mt-9 text-lg font-bold text-slate-900">Conversación</h2>
-            <div className="mt-4 space-y-4">
+            <div className="mt-9 flex items-end justify-between gap-3 border-b border-slate-200 pb-3">
+              <div><p className="text-xs font-bold uppercase tracking-wider text-blue-600">Seguimiento</p><h2 className="mt-1 text-lg font-bold text-slate-900">Conversación</h2></div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{ticket.comments.length} {ticket.comments.length === 1 ? "mensaje" : "mensajes"}</span>
+            </div>
+            <div className="mt-5 space-y-5 rounded-2xl bg-slate-50/70 p-4 sm:p-5">
               {ticket.comments.length === 0 && <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">Aún no hay respuestas. Te avisaremos cuando un analista responda.</p>}
-              {ticket.comments.map((comment) => (
-                <div key={comment.id} className={`flex ${comment.mine ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${comment.mine ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>
-                    <p className="text-xs font-semibold opacity-75">{comment.author}</p>
-                    <p className="mt-1 text-sm leading-6">{comment.message}</p>
-                    <p className="mt-2 text-[11px] opacity-60">{new Date(comment.createdAt).toLocaleString("es-MX")}</p>
+              {[...ticket.comments].reverse().map((comment) => (
+                <div key={comment.id} className={`flex flex-col ${comment.mine ? "items-end" : "items-start"}`}>
+                  <div className={`max-w-[88%] rounded-2xl px-4 py-3 shadow-sm sm:max-w-[75%] ${comment.mine ? "rounded-br-md bg-blue-700 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800"}`}>
+                    <p className={`text-xs font-bold ${comment.mine ? "text-blue-100" : "text-blue-700"}`}>{comment.author}</p>
+                    <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-6">{comment.message}</p>
                   </div>
+                  <time dateTime={comment.createdAt} className={`mt-1.5 px-1 text-[11px] font-medium text-slate-500 ${comment.mine ? "text-right" : "text-left"}`}>{new Date(comment.createdAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</time>
                 </div>
               ))}
             </div>
-            <div className="mt-5 flex gap-3 rounded-2xl border border-slate-200 bg-white p-2 focus-within:ring-2 focus-within:ring-blue-500">
+            <div className="mt-4 flex gap-3 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
               <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={2} placeholder="Escribe una respuesta..." className="min-h-12 flex-1 resize-none border-0 px-3 py-2 text-sm outline-none" />
               <button onClick={sendReply} disabled={sending || !message.trim()} className="self-end rounded-xl bg-blue-600 p-3 text-white hover:bg-blue-700 disabled:opacity-40" aria-label="Enviar respuesta"><Send className="h-5 w-5" /></button>
             </div>
+            {replyError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{replyError}</p>}
           </div>
           <aside className="border-t border-slate-100 bg-slate-50/70 p-6 lg:border-l lg:border-t-0">
             <h2 className="font-bold text-slate-900">Actividad</h2>

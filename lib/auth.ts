@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
+import { clientAddress, consumeRateLimit } from "@/lib/security";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -18,17 +19,19 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Correo", type: "email" },
         password: { label: "Contraseña", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password;
 
         if (!email || !password) return null;
 
+        const rate = consumeRateLimit(`signin:${clientAddress(new Headers(request.headers as HeadersInit))}:${email}`, 8, 15 * 60_000);
+        if (!rate.allowed) return null;
+
         const user = await prisma.user.findUnique({ where: { email }, include: { client: true } });
-
+        const fallbackHash = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.5dA7zqv3YjrK66nKQKmYC8h6WJ0V5eS";
+        const validPassword = await bcrypt.compare(password, user?.passwordHash ?? fallbackHash);
         if (!user?.active) return null;
-
-        const validPassword = await bcrypt.compare(password, user.passwordHash);
         if (!validPassword) return null;
 
         return {

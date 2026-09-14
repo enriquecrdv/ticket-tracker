@@ -15,6 +15,11 @@ export type TicketWithRelations = Prisma.TicketGetPayload<{
   include: typeof ticketInclude;
 }>;
 
+function visibleFolio(ticket: Pick<TicketWithRelations, "number" | "folio">) {
+  if (Number.isInteger(ticket.number)) return String(99999 + ticket.number);
+  return /^\d+$/.test(ticket.folio) ? ticket.folio : "SIN-FOLIO";
+}
+
 function uiStatus(status: TicketWithRelations["status"]) {
   if (status === "PENDIENTE") return "pendiente" as const;
   if (status === "ESPERA_CLIENTE") return "espera_cliente" as const;
@@ -32,6 +37,8 @@ function clientStatus(status: TicketWithRelations["status"]) {
 export function toStaffTicket(ticket: TicketWithRelations) {
   return {
     id: ticket.id,
+    databaseId: ticket.id,
+    folio: visibleFolio(ticket),
     titulo: ticket.title,
     cliente: ticket.client.name,
     cadena: ticket.chain.name,
@@ -73,7 +80,7 @@ export function toClientTicket(ticket: TicketWithRelations) {
   const englishLevel = { bajo: "low", medio: "medium", alto: "high" } as const;
 
   return {
-    id: ticket.folio,
+    id: visibleFolio(ticket),
     databaseId: ticket.id,
     customerNumber: ticket.client.customerNumber,
     branch: ticket.branch?.name ?? ticket.chain.name,

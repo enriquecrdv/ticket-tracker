@@ -11,7 +11,10 @@ const catalogSchema = z.array(z.object({ id: z.string().min(1).max(80), name: z.
 export async function GET() {
   if (!(await requireUser())) return NextResponse.json({ error: "Inicia sesion para consultar el catalogo." }, { status: 401 });
   const setting = await prisma.appSetting.findUnique({ where: { key: "report-catalog" } });
-  return NextResponse.json(setting?.value ? mergeReportCatalog(setting.value as unknown as ReportCategory[]) : DEFAULT_REPORT_CATALOG);
+  return NextResponse.json(
+    setting?.value ? mergeReportCatalog(setting.value as unknown as ReportCategory[]) : DEFAULT_REPORT_CATALOG,
+    { headers: { "Cache-Control": "no-store, max-age=0" } },
+  );
 }
 
 export async function PUT(request: Request) {

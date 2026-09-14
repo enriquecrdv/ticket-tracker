@@ -1,35 +1,42 @@
 "use client";
 
 import React, { useState, FormEvent } from "react";
-import Image from "next/image";
 import { getSession, signIn } from "next-auth/react";
 import "./Login.css";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
-  const [remember, setRemember] = useState<boolean>(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setStatus("Comprobando conexión y credenciales...");
 
     try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12_000);
       const validationResponse = await fetch("/api/auth/validate-credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
-      const validation = await validationResponse.json();
+      window.clearTimeout(timeout);
+      const validationText = await validationResponse.text();
+      const validation = validationText ? JSON.parse(validationText) as { error?: string } : {};
       if (!validationResponse.ok) {
         setError(validation.error ?? "No se pudieron validar las credenciales.");
+        setStatus("");
         setLoading(false);
         return;
       }
 
+      setStatus("Credenciales correctas. Creando sesión segura...");
       const result = await signIn("credentials", {
         email,
         password,
@@ -37,7 +44,8 @@ const Login: React.FC = () => {
       });
 
       if (!result?.ok) {
-        setError("El usuario fue validado, pero no se pudo crear la sesión. Reinicia el servidor de desarrollo.");
+        setError(result?.error === "CredentialsSignin" ? "No se pudo crear la sesión. Reinicia el servidor y vuelve a intentarlo." : "El servicio de sesión no respondió correctamente.");
+        setStatus("");
         setLoading(false);
         return;
       }
@@ -45,13 +53,15 @@ const Login: React.FC = () => {
       const session = await getSession();
       if (!session?.user) {
         setError("La sesión no pudo recuperarse. Recarga la página e intenta nuevamente.");
+        setStatus("");
         setLoading(false);
         return;
       }
       const destination = session.user.role === "ADMIN" ? "/admin" : session.user.role === "CLIENTE" ? "/cliente" : "/analista";
       window.location.assign(destination);
-    } catch {
-      setError("No fue posible conectar con el servidor. Verifica XAMPP y reinicia la aplicación.");
+    } catch (caught) {
+      setError(caught instanceof DOMException && caught.name === "AbortError" ? "El servidor tardó demasiado en responder. Verifica MySQL y vuelve a intentarlo." : "No fue posible conectar o interpretar la respuesta del servidor. Verifica XAMPP y reinicia la aplicación.");
+      setStatus("");
       setLoading(false);
     }
   };
@@ -90,40 +100,14 @@ const Login: React.FC = () => {
               />
             </div>
 
-            <div className="form-options">
-              <label className="remember">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                />
-                Mantener sesión
-              </label>
-
-              <a href="#" className="forgot">
-                ¿Olvidaste tu contraseña?
-              </a>
-            </div>
-
-            {error && <p className="login-error" role="alert">{error}</p>}
+            {status && <p className="login-status" role="status" aria-live="polite">{status}</p>}
+            {error && <div className="login-error" role="alert"><strong>No fue posible iniciar sesión</strong><span>{error}</span></div>}
 
             <button type="submit" className="login-btn" disabled={loading}>
               {loading ? "Ingresando..." : "Iniciar sesión"}
             </button>
 
-            <div className="divider">
-              <span>O</span>
-            </div>
-
-            <div className="social-buttons">
-              <button type="button">
-                <Image src="/icon/google.png" alt="Google" width={20} height={20} />
-              </button>
-            </div>
-
-            <p className="register-text">
-              Don&apos;t have an account? <a href="#">Create Account</a>
-            </p>
+            <p className="login-help">Si olvidaste tu contraseña o tu cuenta está bloqueada, solicita apoyo al administrador.</p>
           </form>
         </div>
 

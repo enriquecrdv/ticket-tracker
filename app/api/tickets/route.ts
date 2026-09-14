@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server-auth";
 import { ticketInclude, toClientTicket, toStaffTicket } from "@/lib/ticket-mappers";
 import { DEFAULT_REPORT_CATALOG, type ReportCategory } from "@/lib/report-catalog";
+import { hasAllowedOrigin, isAllowedUpload, safeUploadName } from "@/lib/security";
 
 const ticketSchema = z.object({
   customerNumber: z.union([z.string().trim().regex(/^\d{9}$/), z.literal("")]),
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
           chainId: session.user.chainId!,
           ...(query ? { OR: [{ folio: query }, { client: { customerNumber: query } }] } : {}),
         }
-      : undefined,
+      : session.user.role === "ANALISTA" ? { assignedToId: session.user.id } : undefined,
     include: ticketInclude,
     orderBy: { createdAt: "desc" },
     take: isClient ? 50 : 200,
@@ -49,7 +50,8 @@ export async function GET(request: Request) {
   );
 }
 
-export async function POST(request: Request) {
+async function createTicket(request: Request) {
+  if (!hasAllowedOrigin(request)) return NextResponse.json({ error: "Origen no permitido." }, { status: 403 });
   const session = await requireUser();
   if (session?.user.role !== "CLIENTE" || !session.user.chainId) {
     return NextResponse.json({ error: "Inicia sesión como cliente." }, { status: 401 });
@@ -65,9 +67,10 @@ export async function POST(request: Request) {
 
   const data = parsed.data;
   const files = [...formData.entries()].filter(([, value]) => value instanceof File) as [string, File][];
-  const allowedExtensions = new Set([".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".eml", ".msg", ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"]);
-  const invalidFile = files.find(([, file]) => !file.size || !allowedExtensions.has(path.extname(file.name).toLowerCase()));
-  if (invalidFile) return NextResponse.json({ error: `El archivo ${invalidFile[1].name} no es un documento, correo o imagen permitido.` }, { status: 400 });
+  if (files.length > 20) return NextResponse.json({ error: "Puedes cargar hasta 20 archivos por solicitud." }, { status: 400 });
+  const validatedFiles = await Promise.all(files.map(async ([key, file]) => ({ key, file, valid: await isAllowedUpload(file, path.extname(file.name).toLowerCase()) })));
+  const invalidFile = validatedFiles.find((item) => !item.valid);
+  if (invalidFile) return NextResponse.json({ error: `El archivo ${safeUploadName(invalidFile.file.name)} no coincide con un documento, correo o imagen permitido.` }, { status: 400 });
   if (files.reduce((total, [, file]) => total + file.size, 0) > 200 * 1024 * 1024) return NextResponse.json({ error: "El total de archivos no puede superar 200 MB." }, { status: 400 });
   const isAccountRequest = data.category === "Alta de clientes";
   if (!isAccountRequest) {
@@ -113,7 +116,13 @@ export async function POST(request: Request) {
     client = await prisma.client.create({ data: { customerNumber: accountCode, name: data.branch, chainId: chain.id } });
   }
 
-  const ticket = await prisma.ticket.create({
+  const eligibleAnalysts = await prisma.user.findMany({
+    where: { role: "ANALISTA", active: true, assignedChains: { some: { id: chain.id } } },
+    select: { id: true, name: true, _count: { select: { assignedTickets: { where: { status: { notIn: ["RESUELTO", "CERRADO"] } } } } } },
+  });
+  const autoAssigned = eligibleAnalysts.sort((a, b) => a._count.assignedTickets - b._count.assignedTickets || a.name.localeCompare(b.name, "es"))[0];
+
+  let ticket = await prisma.ticket.create({
     data: {
       folio: `TKT-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}`,
       title: `${data.category} - ${client.name}`,
@@ -126,9 +135,16 @@ export async function POST(request: Request) {
       clientId: client.id,
       chainId: chain.id,
       branchId: branch.id,
+      assignedToId: autoAssigned?.id,
       createdByUserId: session.user.id,
-      history: { create: { action: "CREADO", detail: "Ticket creado por el cliente.", userId: session.user.id } },
+      history: { create: [{ action: "CREADO", detail: "Ticket creado por el cliente.", userId: session.user.id }, ...(autoAssigned ? [{ action: "ASIGNADO" as const, detail: `Asignado automáticamente a ${autoAssigned.name} por configuración de cadena.` }] : [])] },
     },
+    include: ticketInclude,
+  });
+
+  ticket = await prisma.ticket.update({
+    where: { id: ticket.id },
+    data: { folio: String(99999 + ticket.number) },
     include: ticketInclude,
   });
 
@@ -139,9 +155,17 @@ export async function POST(request: Request) {
     const storageKey = `${ticket.id}-${randomUUID()}${path.extname(file.name)}`;
     await writeFile(path.join(uploadDirectory, storageKey), Buffer.from(await file.arrayBuffer()));
     await prisma.attachment.create({
-      data: { ticketId: ticket.id, originalName: file.name, storageKey, mimeType: file.type, sizeBytes: file.size },
+      data: { ticketId: ticket.id, uploadedById: session.user.id, originalName: safeUploadName(file.name), storageKey, mimeType: file.type || "application/octet-stream", sizeBytes: file.size },
     });
   }
 
   return NextResponse.json(toClientTicket(ticket), { status: 201 });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await createTicket(request);
+  } catch {
+    return NextResponse.json({ error: "No fue posible crear el folio. Verifica que MySQL esté activo y reinicia el servidor de desarrollo." }, { status: 500 });
+  }
 }

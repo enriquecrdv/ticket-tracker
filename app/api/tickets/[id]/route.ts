@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server-auth";
 import { ticketInclude, toStaffTicket } from "@/lib/ticket-mappers";
+import { hasAllowedOrigin } from "@/lib/security";
 
 const statusMap = {
   pendiente: "PENDIENTE",
@@ -16,14 +17,18 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  if (!hasAllowedOrigin(request)) return NextResponse.json({ error: "Origen no permitido." }, { status: 403 });
   const session = await requireUser();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
 
   const { id } = await context.params;
-  const parsed = z.object({ status: z.enum(["pendiente", "seguimiento", "espera_cliente", "cerrado"]).optional(), priority: z.enum(["baja", "media", "alta"]).optional(), adminAlert: z.boolean().optional(), assignedToId: z.string().min(1).nullable().optional(), customerNumber: z.string().regex(/^\d{9}$/).optional(), customerName: z.string().trim().min(2).max(150).optional() }).refine((data) => data.status || data.priority || data.adminAlert !== undefined || data.customerNumber || data.assignedToId !== undefined, "Sin cambios").safeParse(await request.json());
+  const parsed = z.object({ status: z.enum(["pendiente", "seguimiento", "espera_cliente", "cerrado"]).optional(), priority: z.enum(["baja", "media", "alta"]).optional(), adminAlert: z.boolean().optional(), assignedToId: z.string().min(1).nullable().optional(), customerNumber: z.string().regex(/^\d{9}$/).optional(), customerName: z.string().trim().min(2).max(150).optional() }).refine((data) => data.status || data.priority || data.adminAlert !== undefined || data.customerNumber || data.assignedToId !== undefined, "Sin cambios").safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Datos inválidos. El código debe tener 9 dígitos." }, { status: 400 });
 
-  const current = await prisma.ticket.findUniqueOrThrow({ where: { id } });
+  const current = await prisma.ticket.findUnique({ where: { id } });
+  if (!current) return NextResponse.json({ error: "El folio no existe." }, { status: 404 });
+  if (session.user.role === "CLIENTE") return NextResponse.json({ error: "No tienes permiso para administrar folios." }, { status: 403 });
+  if (session.user.role === "ANALISTA" && current.assignedToId !== session.user.id) return NextResponse.json({ error: "Solo puedes modificar folios asignados a ti." }, { status: 403 });
   if (parsed.data.assignedToId !== undefined && session.user.role !== "ADMIN") return NextResponse.json({ error: "Solo administración puede reasignar folios." }, { status: 403 });
   if ((parsed.data.priority || parsed.data.adminAlert !== undefined) && session.user.role !== "ADMIN") return NextResponse.json({ error: "Solo administración puede cambiar prioridad o alerta." }, { status: 403 });
   if (parsed.data.assignedToId) {
@@ -32,7 +37,7 @@ export async function PATCH(
   }
   let clientId: string | undefined;
   if (parsed.data.customerNumber) {
-    let client = await prisma.client.findUnique({ where: { customerNumber: parsed.data.customerNumber } });
+    let client = await prisma.client.findFirst({ where: { customerNumber: parsed.data.customerNumber, chainId: current.chainId } });
     if (!client) {
       if (!parsed.data.customerName) return NextResponse.json({ error: "Indica el nombre para guardar el nuevo código." }, { status: 400 });
       client = await prisma.client.create({ data: { customerNumber: parsed.data.customerNumber, name: parsed.data.customerName, chainId: current.chainId } });
@@ -48,7 +53,7 @@ export async function PATCH(
       ...(parsed.data.adminAlert !== undefined ? { adminAlert: parsed.data.adminAlert } : {}),
       ...(clientId ? { clientId } : {}),
       ...(parsed.data.assignedToId !== undefined ? { assignedToId: parsed.data.assignedToId } : session.user.role === "ANALISTA" ? { assignedToId: session.user.id } : {}),
-      ...(parsed.data.status ? { closedAt: parsed.data.status === "cerrado" ? new Date() : null } : {}),
+      ...(parsed.data.status ? { resolvedAt: parsed.data.status === "cerrado" ? new Date() : null, closedAt: parsed.data.status === "cerrado" ? new Date() : null } : {}),
       history: {
         create: {
           action: parsed.data.customerNumber ? "ACTUALIZADO" : "CAMBIO_ESTADO",

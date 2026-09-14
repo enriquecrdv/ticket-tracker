@@ -1,6 +1,6 @@
 # Ticket Tracker — índice técnico
 
-Actualizado: 2026-08-19.
+Actualizado: 2026-09-14.
 
 ## Resumen
 
@@ -26,8 +26,11 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | Detalle cliente | `components/client/TicketDetail.tsx` | Conversación, actividad y datos del ticket |
 | Vista cliente | `app/test-cliente/page.tsx` | Monta el componente de cliente |
 | Tipos UI | `lib/types.ts` | Tipos heredados de las pantallas simuladas |
-| Datos simulados | `lib/mock-data.ts` | Datos temporales para admin y analista |
-| Permisos UI | `lib/permissions.ts` | Matriz declarativa todavía no conectada al servidor |
+| Tema y cuenta | `components/shared/UserMenu.tsx` | Perfil, cierre de sesión, modo oscuro y acceso a comunicados |
+| Comunicados | `components/shared/AnnouncementsCenter.tsx` | Lectura y publicación segmentada de avisos operativos |
+| Seguridad | `lib/security.ts`, `DOCUMENTACION.md` | Contraseñas, límites, origen, archivos y lista de producción |
+| Sistema visual | `components/shared/WorkspaceHeader.tsx`, `PageHeader.tsx`, `lib/ui.ts` | Navegación, jerarquía, estados y estilos comunes |
+| Documentación | `DOCUMENTACION.md` | Instalación, arquitectura, UX, seguridad y despliegue Hostinger |
 
 ## Rutas actuales
 
@@ -48,6 +51,8 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | `/api/report-catalog` | Sesión/ADMIN | Consultar y administrar el catálogo dinámico de reportes |
 | `/api/notifications` | Sesión/ADMIN | Consultar y enviar notificaciones internas |
 | `/api/notifications/[id]` | Sesión | Marcar una notificación como leída |
+| `/api/announcements` | Sesión / `ADMIN` | Consultar avisos visibles; ADMIN publica y segmenta |
+| `/api/announcements/[id]` | Solo `ADMIN` | Activar o desactivar comunicados |
 | `/api/users` | Solo `ADMIN` | Listar cuentas internas y clientes; crear usuarios internos |
 | `/api/chains` | Staff / `ADMIN` | Staff consulta cadenas y condiciones; solo ADMIN crea |
 | `/api/chains/[id]/clients` | Solo `ADMIN` | Agregar códigos o importar clientes desde Excel `.xlsx` |
@@ -68,7 +73,7 @@ Git.
 ## Modelo Prisma
 
 Entidades: `User`, `Client`, `Chain`, `Branch`, `Ticket`, `TicketComment`,
-`TicketHistory`, `Attachment`, `AppSetting` y `Notification`.
+`TicketHistory`, `Attachment`, `AppSetting`, `Notification` y `Announcement`.
 
 Estados oficiales de base de datos:
 
@@ -82,8 +87,20 @@ Los folios incluyen una alerta administrativa independiente (`adminAlert`). El
 catálogo combina los reportes base con los personalizados para evitar que las
 categorías iniciales desaparezcan al editar la configuración.
 
+Cada ticket tiene un consecutivo autoincremental visible desde `100000`. El ID
+interno continúa siendo CUID y no se muestra como referencia operativa.
+
+Los analistas se vinculan a una o más cadenas mediante la relación
+`AnalystChains`. Al crear un folio, el sistema selecciona automáticamente al
+analista activo autorizado con menor cantidad de folios abiertos. ADMIN puede
+reasignar manualmente cualquier folio.
+
 La traducción entre enums de Prisma y estados visuales está centralizada en
 `lib/ticket-mappers.ts`.
+
+Las sesiones se revalidan contra usuarios activos en cada API. Las escrituras
+verifican origen y los analistas solo modifican, comentan, adjuntan o exportan
+folios asignados a ellos. Consulta `DOCUMENTACION.md` antes de publicar.
 
 ## Enrutamiento por tarea
 
@@ -92,10 +109,15 @@ La traducción entre enums de Prisma y estados visuales está centralizada en
   cambian datos iniciales.
 - Tickets del cliente: `components/client/` y `app/api/tickets/`.
 - Panel del analista: `components/analyst/AnalystWorkspace.tsx` y APIs de tickets, comentarios, adjuntos y cadenas.
-- Administración: `app/admin/page.tsx`, APIs de usuarios y cadenas.
+- Administración: `app/admin/page.tsx`, `components/admin/TeamManager.tsx` y
+  APIs de usuarios/cadenas. Equipo configura qué cadenas recibe cada analista.
 - Perfil compartido: `components/shared/UserMenu.tsx` y `app/api/profile/route.ts`.
+- Tema compartido: `components/shared/ThemeToggle.tsx` y reglas `.dark` en `app/globals.css`.
+- Comunicados: `components/shared/AnnouncementsCenter.tsx` y `app/api/announcements/`.
+- Listados de folios: cliente usa tabla/tarjetas con paginación; administración
+  usa tabla compacta paginada y analista una cola compacta priorizada.
 - Estilos del login: `components/Login.css` y `components/Login.tsx`.
-- Navegación: `components/MENU/menu.tsx` y `components/MENU/menu.css`.
+- Navegación activa: `components/shared/WorkspaceHeader.tsx`.
 
 ## Comandos
 
@@ -113,7 +135,7 @@ npm run build
 ## Estado pendiente prioritario
 
 1. Incorporar paginación y filtros del servidor para volúmenes altos.
-2. Migrar los tipos visuales heredados a contratos compartidos.
+2. Dividir las pantallas grandes por módulo y migrar tipos heredados a contratos por dominio.
 3. Sustituir el almacenamiento local de adjuntos por almacenamiento externo antes de producción.
 4. Añadir pruebas de autenticación, permisos y ciclo de vida del ticket.
 

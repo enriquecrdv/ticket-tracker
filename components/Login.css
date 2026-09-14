@@ -385,9 +385,39 @@
   }
 }
 .login-error {
+  display: grid;
+  gap: 4px;
   margin: 0;
-  color: #b91c1c;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
   font-size: 0.875rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.login-error span {
+  color: #b91c1c;
+}
+
+.login-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.login-help {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.5;
   text-align: center;
 }
 

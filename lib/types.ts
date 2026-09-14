@@ -11,6 +11,7 @@ export interface User {
   createdAt: string;
   chain?: string;
   customerNumber?: string;
+  assignedChains?: Array<{ id: string; name: string }>;
 }
 
 export interface Chain {
@@ -57,6 +58,8 @@ export interface TicketAttachment {
 
 export interface Ticket {
   id: string;
+  databaseId: string;
+  folio: string;
   titulo: string;
   cliente: string;
   cadena: string;
