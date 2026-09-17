@@ -29,7 +29,7 @@ Prisma 7 y NextAuth 4. MySQL local se ejecuta mediante XAMPP.
 | Tema y cuenta | `components/shared/UserMenu.tsx` | Perfil, cierre de sesión, modo oscuro y acceso a comunicados |
 | Comunicados | `components/shared/AnnouncementsCenter.tsx` | Lectura y publicación segmentada de avisos operativos |
 | Seguridad | `lib/security.ts`, `DOCUMENTACION.md` | Contraseñas, límites, origen, archivos y lista de producción |
-| Sistema visual | `components/shared/WorkspaceHeader.tsx`, `PageHeader.tsx`, `lib/ui.ts` | Navegación, jerarquía, estados y estilos comunes |
+| Sistema visual | `components/shared/WorkspaceHeader.tsx`, `PageHeader.tsx`, `AppFooter.tsx`, `lib/ui.ts` | Navegación, jerarquía, pie global, estados y estilos comunes |
 | Documentación | `DOCUMENTACION.md` | Instalación, arquitectura, UX, seguridad y despliegue Hostinger |
 
 ## Rutas actuales

@@ -25,6 +25,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.app-shell-content > .min-h-screen,
+.app-shell-content > .login-container {
+  min-height: auto;
+  flex: 1;
+}
+
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
