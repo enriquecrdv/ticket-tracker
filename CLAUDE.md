@@ -1,16 +1,11 @@
-# Instrucciones de trabajo
-
-Lee primero `PROJECT_INDEX.md`. No recorras todo el repositorio si el índice
-identifica los archivos relacionados con la tarea.
-
 <!-- MEMANTO-MANAGED-SECTION -->
 <!-- memanto-template-version: 1.0.0 -->
 ## MEMANTO - Your Active Memory Companion
 
 > **CRITICAL DIRECTIVE**: You are an agent equipped with Memanto. Without it, you are amnesiac. You have zero memory between chat sessions. Your ability to learn and adapt depends ENTIRELY on you actively writing to Memanto.
 
-Every memory operation in this session goes through MEMANTO. There is no exception. All memanto commands are **shell commands**. Always run them using the terminal. Never simulate, describe, or "pretend to call" them.
-> **Note**: The `memanto-memory` skill in `.agents/skills/memanto/` contains detailed reference guidelines (best practices, confidence levels, tagging).
+Every memory operation in this session goes through MEMANTO. There is no exception. All memanto commands are **shell commands**. Always run them using the Bash tool. Never simulate, describe, or "pretend to call" them.
+> **Note**: The `memanto-memory` skill contains reference guidelines only (best practices, confidence levels, tagging). It is NOT executable — always use Bash for memanto commands.
 
 ### 1. ENVIRONMENT-AWARE EXECUTION PROTOCOL
 Before you write any code or provide a final answer, you MUST evaluate if the current context contains new memory triggers.
@@ -41,12 +36,12 @@ Before storing, ask yourself: *"Will this generalized principle fundamentally ch
 - **DO NOT STORE**: Step-by-step progress, routine bug fixes, UI tweaks, temporary code snippets, or literal chat summaries.
 
 ### 4. RECALL TRIGGER MATRIX (WHEN TO SEARCH MEMORY)
-Do not guess or write code blindly. Run `memanto recall` (or `memanto answer`) using the terminal before acting if any of the following occur. Always pass `--tool codex` on these reads: they carry no `--source`, and that flag is how Memanto identifies you as the calling agent.
+Do not guess or write code blindly. Run `memanto recall` (or `memanto answer`) using the Bash tool before acting if any of the following occur. Always pass `--tool claude-code` on these reads: they carry no `--source`, and that flag is how Memanto identifies you as the calling agent.
 - **[TASK INITIATION]** Before starting a complex feature, refactor, or multi-file architecture task, search for relevant stack constraints, rules, and prior decisions.
 - **[AMBIGUOUS REPAIR / ERROR]** When facing a cryptic build failure, test failure, or environment bug, search memory for past workarounds and error post-mortems.
 - **[UNSTATED PREFERENCE]** When about to choose a library, pattern, or naming convention that isn't specified in the prompt, search memory to see if a preference was established in an earlier session.
 - **[EXPLICIT USER QUESTION]** When the user asks "What did we decide about X?", "Check memory", or "Recall context", run `memanto recall` (or `memanto answer`) immediately.
-- **[FRESH SESSION / CONTEXT REFRESH]** At session start or after switching tasks, run `memanto recall --recent --tool codex` to retrieve active task state and recent commitments.
+- **[FRESH SESSION / CONTEXT REFRESH]** At session start or after switching tasks, run `memanto recall --recent --tool claude-code` to retrieve active task state and recent commitments.
 
 ### 5. HOW TO EXECUTE
 For all command syntax, required flags, memory types, tagging best practices, and CLI options, refer to the `memanto-memory` SKILL.md. You MUST read this skill before running any memory operations if you do not know the exact command schema.
@@ -55,31 +50,3 @@ For all command syntax, required flags, memory types, tagging best practices, an
 
 <!-- MEMANTO-DYNAMIC-MEMORIES -->
 <!-- /MEMANTO-DYNAMIC-MEMORIES -->
-
-## Uso eficiente del contexto
-
-- Busca símbolos, imports, rutas o mensajes concretos antes de abrir archivos.
-- En archivos grandes, lee solo el bloque relevante y sus imports/tipos.
-- No leas `.next`, `node_modules`, `lib/generated` ni migraciones históricas,
-  salvo que la tarea lo requiera expresamente.
-- No vuelvas a analizar áreas ya descritas en `PROJECT_INDEX.md` si no cambiaron.
-- Conserva cambios locales del usuario y limita cada parche al objetivo actual.
-- Da actualizaciones y respuestas finales breves, salvo que se pida detalle.
-
-## Validación proporcional
-
-- Cambio aislado: ESLint sobre los archivos modificados y `tsc --noEmit`.
-- Cambio de Prisma: `prisma format`, `prisma validate` y una migración cuando
-  cambie el esquema.
-- Cambio de autenticación, rutas o configuración: además ejecutar `next build`.
-- Ejecutar pruebas específicas antes que suites completas cuando existan.
-
-## Convenciones
-
-- TypeScript estricto; evitar `any` y duplicación de tipos de dominio.
-- Validar entradas externas con Zod y permisos en el servidor.
-- Nunca registrar contraseñas, tokens, secretos o cadenas de conexión.
-- No incluir `.env` ni credenciales reales en Git.
-- Mantener `PROJECT_INDEX.md` sincronizado con cambios arquitectónicos.
-
-Consulta también el `AGENTS.md` del subdirectorio que estés modificando.
